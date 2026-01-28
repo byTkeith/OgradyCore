@@ -36,7 +36,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       setConnStatus('offline');
       if (window.location.protocol === 'https:' && bridgeUrl.startsWith('http:')) {
-        setErrorDetail("MIXED CONTENT: Vercel is HTTPS. You MUST use your ngrok 'https://' URL.");
+        setErrorDetail("MIXED CONTENT ERROR: Use your https:// ngrok URL.");
       } else {
         setErrorDetail("UNREACHABLE: Check if main.py is running and ngrok is active.");
       }
@@ -83,25 +83,24 @@ const App: React.FC = () => {
                 </div>
                 {errorDetail && (
                   <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-2xl mt-4 space-y-4">
-                    <p className="text-rose-400 text-xs font-bold uppercase tracking-tight">⚠️ Connection Issue Detected:</p>
+                    <p className="text-rose-400 text-xs font-bold uppercase tracking-tight">⚠️ SQL Error 18456 Diagnostic:</p>
                     <p className="text-[11px] text-slate-300 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10">{errorDetail}</p>
                     
                     {(errorDetail.includes('18456') || errorDetail.includes('Login failed')) && (
                       <div className="space-y-3">
                         <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                          <p className="text-[11px] text-amber-400 font-bold uppercase">🎯 Critical Diagnosis</p>
+                          <p className="text-[11px] text-amber-400 font-bold uppercase">🎯 USERNAME CHECK</p>
                           <p className="text-[10px] text-slate-400 mt-1">
-                            Your SQL Server log rejected user "OgradyCore". Check if you meant "OgradrayCore" (with an 'a'). 
-                            Update <b>main.py</b> and restart it.
+                            The log says "Login failed for OgradyCore". Verify if it should be "OgradrayCore" (with an A) or "OgradyCore". 
+                            Ensure the password in main.py is correct.
                           </p>
                         </div>
                         <div className="p-4 bg-black/60 rounded-xl border border-slate-700">
-                          <p className="text-[10px] font-bold text-white mb-2 uppercase">Server Fix Steps:</p>
+                          <p className="text-[10px] font-bold text-white mb-2 uppercase">Fixing Login Issues:</p>
                           <ul className="text-[10px] text-slate-400 space-y-2 list-disc pl-4">
-                            <li>Check password in <b>main.py</b> (did you replace the placeholder?).</li>
-                            <li>SSMS: Right-click Server Name and select Properties.</li>
-                            <li>Security: Ensure "SQL Server and Windows Authentication" is selected.</li>
-                            <li>Restart SQL Server (SQLEXPRESS) in Windows Services.</li>
+                            <li>Open SSMS: Right-click Server - Properties - Security - Select Mixed Mode.</li>
+                            <li>SSMS: Logins - Right-click User - Status - Set to Enabled.</li>
+                            <li>Restart SQL Server (SQLEXPRESS) Service in Windows.</li>
                           </ul>
                         </div>
                       </div>
@@ -115,17 +114,17 @@ const App: React.FC = () => {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">1</div>
                 <h4 className="text-xs font-black text-white uppercase tracking-widest">Update main.py</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Fix username spelling/password and restart the Python script.</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Fix username/password and restart main.py.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">2</div>
                 <h4 className="text-xs font-black text-white uppercase tracking-widest">Restart Tunnel</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed italic">Verify ngrok is showing green "Online" status.</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed italic">Verify ngrok is showing green "Online".</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">3</div>
                 <h4 className="text-xs font-black text-white uppercase tracking-widest">Paste Link</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Copy the HTTPS URL from ngrok and paste it into the box above.</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Copy the HTTPS URL from ngrok and paste it here.</p>
               </div>
             </div>
           </div>
@@ -145,7 +144,7 @@ const App: React.FC = () => {
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{connStatus.toUpperCase()}</span>
           </div>
           <div className="flex gap-4">
-             <span className="text-[10px] font-mono text-slate-500">{bridgeUrl ? bridgeUrl.substring(0, 30) + "..." : "No Bridge Configured"}</span>
+             <span className="text-[10px] font-mono text-slate-500">{bridgeUrl ? bridgeUrl.substring(0, 30) + "..." : "Link Bridge Now"}</span>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
