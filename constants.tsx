@@ -3,47 +3,62 @@ import React from 'react';
 
 /**
  * PRODUCTION SCHEMA MAP for Ultisales
- * ALL TABLES REQUIRE 'dbo.' PREFIX AND MUST BE UPPERCASE.
+ * VERIFIED AGAINST USER DATA DICTIONARY:
+ * - All table names MUST use 'dbo.' prefix and be UPPERCASE.
+ * - dbo.STOCK does NOT have PLUCode. Use 'Barcode' for joins.
  */
 export const SCHEMA_MAP = {
   "dbo.AUDIT": {
-    description: "Line-level transactional data. Use for sales history, quantity, and daily performance.",
+    description: "Primary transactional audit log. Contains individual sales lines and item movements.",
+    primaryKeys: ["ANUMBER", "LineGUID", "HeadGuid", "TransactionDate", "PLUCode", "TransactionType", "SequenceNumber", "ProviderTRNR"],
     fields: [
       "ANUMBER", "LineGUID", "HeadGuid", "PLUCode", "Description", 
       "TransactionDate", "TransactionTime", "Qty", "CostPriceExcl", 
       "RetailPriceExcl", "TransactionNumber", "DebtorOrCreditorNumber",
-      "StockType", "OrderDate", "Operator", "TaxValue", "TaxRate"
+      "StockType", "OrderDate", "Operator", "TaxValue", "TaxRate", "SequenceNumber", "TransactionType"
     ],
-    primaryKey: "LineGUID",
     joins: {
       "dbo.DEBTOR": "dbo.AUDIT.DebtorOrCreditorNumber = dbo.DEBTOR.ANUMBER",
-      "dbo.CREDITOR": "dbo.AUDIT.DebtorOrCreditorNumber = dbo.CREDITOR.ANUMBER",
-      "dbo.STOCK": "dbo.AUDIT.PLUCode = dbo.STOCK.PLUCode"
+      "dbo.STOCK": "dbo.AUDIT.PLUCode = dbo.STOCK.Barcode",
+      "dbo.TRANSACTIONS": "dbo.AUDIT.TransactionNumber = dbo.TRANSACTIONS.TransactionNumber"
     }
   },
-  "dbo.DEBTOR": {
-    description: "Client account database.",
-    fields: [
-      "ANUMBER", "Surname", "Title", "Initials", "TelephoneNumber1", 
-      "Status", "DebGUID", "PostalAdd1", "PostalCode", "MainAccountNumber"
-    ],
-    primaryKey: "ANUMBER"
-  },
   "dbo.STOCK": {
-    description: "Product Master. Contains stock levels and product descriptions.",
+    description: "Inventory Master table. Stores product details and current stock levels.",
+    primaryKeys: ["ANUMBER", "GUID", "Barcode"],
     fields: [
-      "PLUCode", "Description", "CostPriceExcl", "RetailPriceExcl", 
-      "OnHand", "Barcode", "StockType", "TotalQtySold", "AvgCostPrice", "BIGGRIDVALUE"
+      "ANUMBER", "GUID", "Barcode", "Description", "CostPriceExcl", "RetailPriceExcl", 
+      "OnHand", "TotalQtySold", "AvgCostPrice", "StockType", "Status"
     ],
-    primaryKey: "PLUCode"
+    primaryKey: "Barcode"
+  },
+  "dbo.DEBTOR": {
+    description: "Customer/Debtor master database. ANUMBER is the unique internal identifier.",
+    primaryKeys: ["ANUMBER", "DebGUID", "Number"],
+    fields: [
+      "ANUMBER", "DebGUID", "Number", "Surname", "Title", "Initials", 
+      "TelephoneNumber1", "Status", "PostalAdd1", "PostalCode", "MainAccountNumber"
+    ]
+  },
+  "dbo.CREDITOR": {
+    description: "Supplier/Vendor master database.",
+    primaryKeys: ["ANUMBER", "KredGUID", "Number"],
+    fields: [
+      "ANUMBER", "KredGUID", "Number", "Name", "TelephoneNumber", "Status"
+    ]
   },
   "dbo.TRANSACTIONS": {
-    description: "Header summary records for invoices and payments.",
+    description: "Financial header summary records for invoices, receipts, and returns.",
+    primaryKeys: ["ANUMBER", "GUID"],
     fields: [
-      "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", 
-      "TransactionType", "PaidUp", "Branch"
-    ],
-    primaryKey: "TransactionNumber"
+      "ANUMBER", "GUID", "TransactionNumber", "InvoiceNumber", "InvoiceDate", 
+      "InvoicePrice", "TransactionType", "PaidUp", "Branch"
+    ]
+  },
+  "dbo.AUDIT_STOCK": {
+    description: "Inventory-specific audit records.",
+    primaryKeys: ["ANUMBER", "OuLineGuid", "OuHeadGuid"],
+    fields: ["ANUMBER", "OuLineGuid", "OuHeadGuid"]
   }
 };
 

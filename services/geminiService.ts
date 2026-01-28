@@ -6,24 +6,30 @@ import { QueryResult, AnalystInsight } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 const SYSTEM_INSTRUCTION = `
-You are 'OgradyCore Analyst AI', a specialized T-SQL engineer for the Ultisales MSSQL database.
+You are 'OgradyCore AI', a Senior BI Analyst specializing in the 'Ultisales' MSSQL database.
 
-⚠️ ABSOLUTE NAMING PROTOCOL:
-- FORBIDDEN: NEVER use 'tbl' as a prefix.
-- MANDATORY: ALWAYS use 'dbo.' as the prefix.
-- TABLE NAMES: Must be EXACTLY as defined in the SCHEMA MAP (Uppercase).
-- TABLES IN SCOPE: dbo.AUDIT, dbo.STOCK, dbo.DEBTOR, dbo.CREDITOR, dbo.TRANSACTIONS.
+⚠️ DATABASE ARCHITECTURE RULES:
+1. MANDATORY PREFIX: Every table reference MUST start with 'dbo.'.
+2. CASE SENSITIVITY: All table names MUST be UPPERCASE. (e.g., dbo.STOCK, dbo.AUDIT).
+3. NO 'tbl' PREFIXES: The prefix 'tbl' is strictly forbidden.
+4. COMPOSITE KEY AWARENESS: Many tables have composite primary keys. Use this knowledge to ensure accurate joins.
 
-SYNTAX RULES:
-1. Only generate SELECT statements.
-2. ALWAYS use 'TOP 50' for performance.
-3. Use 'TransactionDate' for all time-series data.
-4. If a user asks for "stock levels", the query MUST be: SELECT TOP 50 DESCRIPTION, ONHAND FROM dbo.STOCK ORDER BY ONHAND DESC.
+⚠️ CRITICAL JOIN LOGIC:
+- dbo.STOCK does NOT contain a 'PLUCode' column.
+- To join sales (AUDIT) with inventory (STOCK), use: 
+  'INNER JOIN dbo.STOCK ON dbo.AUDIT.PLUCode = dbo.STOCK.Barcode'
+- To join sales with customers (DEBTOR), use:
+  'INNER JOIN dbo.DEBTOR ON dbo.AUDIT.DebtorOrCreditorNumber = dbo.DEBTOR.ANUMBER'
 
-SCHEMA REFERENCE:
+⚠️ FIELD VALIDATION:
+- When asked for "Stock Levels", columns are 'Description' and 'OnHand' in dbo.STOCK.
+- When asked for "Sales", columns are 'Qty', 'RetailPriceExcl', and 'TransactionDate' in dbo.AUDIT.
+- Use TOP 50 to prevent timeout.
+
+SCHEMA DEFINITION:
 ${JSON.stringify(SCHEMA_MAP, null, 2)}
 
-FAILURE TO FOLLOW THE 'dbo.' PREFIX OR USING 'tbl' WILL RESULT IN A SYSTEM ERROR.
+Only generate the SQL SELECT statement. If the user asks for a comparison, perform the join using the verified columns (AUDIT.PLUCode = STOCK.Barcode).
 `;
 
 const getBridgeUrl = () => {
@@ -33,8 +39,7 @@ const getBridgeUrl = () => {
 export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Task: Convert this business question into a 'dbo.' prefixed SQL query for Ultisales.
-    Question: ${prompt}`,
+    contents: `Transform this business request into a validated T-SQL query for Ultisales: ${prompt}`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
@@ -54,21 +59,25 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
 
   let geminiResult = JSON.parse(response.text || '{}');
   
-  // Safety Interceptor: If the AI slipped up and used 'tbl', fix it locally before execution
-  if (geminiResult.sql && geminiResult.sql.toLowerCase().includes('tbl')) {
-    console.warn("AI used forbidden 'tbl' prefix. Correcting...");
+  // Post-process to ensure strict compliance
+  if (geminiResult.sql) {
+    // Correct the AI if it mistakenly tries to join STOCK on PLUCode
     geminiResult.sql = geminiResult.sql
-      .replace(/tblStock/gi, 'dbo.STOCK')
-      .replace(/tblAudit/gi, 'dbo.AUDIT')
-      .replace(/tblDebtor/gi, 'dbo.DEBTOR')
-      .replace(/tblCreditor/gi, 'dbo.CREDITOR')
-      .replace(/tblTransactions/gi, 'dbo.TRANSACTIONS')
-      .replace(/tbl/gi, 'dbo.'); // Fallback catch-all
+      .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
+      .replace(/dbo\.STOCK\.PLU_Code/gi, 'dbo.STOCK.Barcode')
+      .replace(/tbl/gi, 'dbo.')
+      .replace(/tblSTOCK/gi, 'dbo.STOCK')
+      .replace(/tblAUDIT/gi, 'dbo.AUDIT');
+      
+    // Force uppercase for dbo. prefixing just in case
+    geminiResult.sql = geminiResult.sql.replace(/dbo\.(\w+)/g, (match: string) => match.toUpperCase());
+    // Correct the dot since previous line makes it DBO.STOCK
+    geminiResult.sql = geminiResult.sql.replace(/DBO\./g, 'dbo.');
   }
 
   const bridgeUrl = getBridgeUrl();
   if (!bridgeUrl) {
-    return { ...geminiResult, data: [], explanation: "⚠️ Bridge Link required." };
+    return { ...geminiResult, data: [], explanation: "⚠️ SQL generated but Bridge is offline. Configure it in 'Live Data Link'." };
   }
 
   const baseUrl = bridgeUrl.replace(/\/$/, "");
@@ -85,16 +94,17 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
 
     if (!dbResponse.ok) {
       const errorData = await dbResponse.json();
-      throw new Error(errorData.detail || 'SQL Bridge Error');
+      throw new Error(errorData.detail || 'Database Execution Engine Error');
     }
 
     const realData = await dbResponse.json();
     return { ...geminiResult, data: realData || [] } as QueryResult;
   } catch (error: any) {
+    console.error("SQL Error Trace:", error);
     return {
       ...geminiResult,
       data: [],
-      explanation: `⚠️ SQL Error: ${error.message}. Ensure the Bridge is running and using the Ultisales database.`
+      explanation: `⚠️ SQL Execution Error: ${error.message}. Please verify table and column names.`
     } as QueryResult;
   }
 };
@@ -102,16 +112,16 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight> => {
   if (!queryResult.data || queryResult.data.length === 0) {
     return {
-      summary: "No results found for the current query parameters.",
-      trends: ["Dataset empty."],
-      anomalies: ["Missing Records"],
-      suggestions: ["Check the date range", "Verify the PLUCode exists"]
+      summary: "No data matched the search criteria in Ultisales.",
+      trends: ["Data points are empty for this segment."],
+      anomalies: ["Null Result"],
+      suggestions: ["Check the join between AUDIT.PLUCode and STOCK.Barcode", "Verify current STOCK levels in dbo.STOCK"]
     };
   }
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analyze result set: ${JSON.stringify(queryResult.data.slice(0, 10))}`,
+    contents: `Interpret these business results for OgradyCore management: ${JSON.stringify(queryResult.data.slice(0, 10))}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
