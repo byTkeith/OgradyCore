@@ -1,0 +1,5 @@
+{
+  "name": "UltiSales AI-BI Dashboard",
+  "description": "A high-performance Business Intelligence dashboard and Intelligent Analyst interface for the UltiSales database, featuring Natural Language to SQL querying, dynamic Recharts visualizations, and AI-driven business insights.",
+  "requestFramePermissions": []
+}
