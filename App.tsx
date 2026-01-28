@@ -91,9 +91,9 @@ const App: React.FC = () => {
                     {(errorDetail.includes('18456') || errorDetail.includes('Login failed')) && (
                       <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
                         <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
-                          <p className="text-[11px] text-amber-400 font-bold uppercase mb-2">💡 Why the mapping "unticks":</p>
+                          <p className="text-[11px] text-amber-400 font-bold uppercase mb-2">💡 Orphaned User Fix:</p>
                           <p className="text-[10px] text-slate-400 leading-relaxed">
-                            You likely have an <b>Orphaned User</b>. The mapping reverts because a user named OgradyCore already exists in the DB but isn't linked to the login.
+                            If your database mapping "unticks" in SSMS, it's an orphaned user. Run this script in a New Query window in SSMS:
                           </p>
                         </div>
                         
@@ -102,12 +102,11 @@ const App: React.FC = () => {
                           <pre className="text-[9px] text-emerald-400 bg-black p-3 rounded-lg overflow-x-auto font-mono border border-emerald-500/20">
 {`USE Ultisales;
 GO
-ALTER USER [OgradyCore] WITH LOGIN = [OgradyCore];
+ALTER USER [OgradrayCore] WITH LOGIN = [OgradrayCore];
 GO
-ALTER ROLE [db_datareader] ADD MEMBER [OgradyCore];
+ALTER ROLE [db_datareader] ADD MEMBER [OgradrayCore];
 GO`}
                           </pre>
-                          <p className="text-[9px] text-slate-500 mt-2 italic">This fixes the mapping without using the buggy GUI checkboxes.</p>
                         </div>
                       </div>
                     )}
@@ -118,16 +117,16 @@ GO`}
 
             <div className="grid md:grid-cols-3 gap-8">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">1. Update Code</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Check main.py username and password.</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">1. Spelling Check</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Ensure you use OgradrayCore (with an 'a') in main.py.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <h4 className="text-xs font-black text-white uppercase tracking-widest">2. Run SQL Fix</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Run the script above in SSMS to link the user.</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Run the ALTER USER script above to link the login.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <h4 className="text-xs font-black text-white uppercase tracking-widest">3. Restart</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Restart main.py and test the link again.</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Restart main.py and click Re-Sync above.</p>
               </div>
             </div>
           </div>
