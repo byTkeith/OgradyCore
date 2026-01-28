@@ -3,11 +3,11 @@ import React from 'react';
 
 /**
  * PRODUCTION SCHEMA MAP for Ultisales
- * CRITICAL: All table names MUST have 'dbo.' prefix and be UPPERCASE.
+ * ALL TABLES REQUIRE 'dbo.' PREFIX AND MUST BE UPPERCASE.
  */
 export const SCHEMA_MAP = {
   "dbo.AUDIT": {
-    description: "Transactional log for all sales and purchases. Use this for revenue, quantity, and trend analysis.",
+    description: "Line-level transactional data. Use for sales history, quantity, and daily performance.",
     fields: [
       "ANUMBER", "LineGUID", "HeadGuid", "PLUCode", "Description", 
       "TransactionDate", "TransactionTime", "Qty", "CostPriceExcl", 
@@ -22,7 +22,7 @@ export const SCHEMA_MAP = {
     }
   },
   "dbo.DEBTOR": {
-    description: "Client/Customer table. Stores account balances and contact info.",
+    description: "Client account database.",
     fields: [
       "ANUMBER", "Surname", "Title", "Initials", "TelephoneNumber1", 
       "Status", "DebGUID", "PostalAdd1", "PostalCode", "MainAccountNumber"
@@ -30,7 +30,7 @@ export const SCHEMA_MAP = {
     primaryKey: "ANUMBER"
   },
   "dbo.STOCK": {
-    description: "Inventory Master. Use this for product descriptions, stock on hand, and current pricing.",
+    description: "Product Master. Contains stock levels and product descriptions.",
     fields: [
       "PLUCode", "Description", "CostPriceExcl", "RetailPriceExcl", 
       "OnHand", "Barcode", "StockType", "TotalQtySold", "AvgCostPrice", "BIGGRIDVALUE"
@@ -38,7 +38,7 @@ export const SCHEMA_MAP = {
     primaryKey: "PLUCode"
   },
   "dbo.TRANSACTIONS": {
-    description: "Financial header summary records.",
+    description: "Header summary records for invoices and payments.",
     fields: [
       "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", 
       "TransactionType", "PaidUp", "Branch"

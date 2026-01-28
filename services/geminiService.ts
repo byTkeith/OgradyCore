@@ -6,43 +6,35 @@ import { QueryResult, AnalystInsight } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 const SYSTEM_INSTRUCTION = `
-You are a senior Business Intelligence Analyst for 'OgradyCore'.
-You have access to a SQL Server database schema (Ultisales). 
+You are 'OgradyCore Analyst AI', a specialized T-SQL engineer for the Ultisales MSSQL database.
 
-CRITICAL: The tables in the database use the 'tbl' prefix. 
-Examples: 
-- tblClients (not DEBTOR)
-- tblInvoices (not TRANSACTIONS)
-- tblStock (not STOCK)
-- tblAudit (not AUDIT)
+⚠️ ABSOLUTE NAMING PROTOCOL:
+- FORBIDDEN: NEVER use 'tbl' as a prefix.
+- MANDATORY: ALWAYS use 'dbo.' as the prefix.
+- TABLE NAMES: Must be EXACTLY as defined in the SCHEMA MAP (Uppercase).
+- TABLES IN SCOPE: dbo.AUDIT, dbo.STOCK, dbo.DEBTOR, dbo.CREDITOR, dbo.TRANSACTIONS.
 
-Your task:
-1. Translate Natural Language into a valid T-SQL query using the 'tbl' prefix for table names.
-2. Determine the best visualization type (bar, line, scatter, area, pie) and axis mappings.
-3. Provide an explanation of the analytical logic.
+SYNTAX RULES:
+1. Only generate SELECT statements.
+2. ALWAYS use 'TOP 50' for performance.
+3. Use 'TransactionDate' for all time-series data.
+4. If a user asks for "stock levels", the query MUST be: SELECT TOP 50 DESCRIPTION, ONHAND FROM dbo.STOCK ORDER BY ONHAND DESC.
 
-Database Schema Map Reference:
+SCHEMA REFERENCE:
 ${JSON.stringify(SCHEMA_MAP, null, 2)}
+
+FAILURE TO FOLLOW THE 'dbo.' PREFIX OR USING 'tbl' WILL RESULT IN A SYSTEM ERROR.
 `;
 
-// Helper to get the current bridge URL
 const getBridgeUrl = () => {
-  return localStorage.getItem('og_bridge_url') || 'http://192.168.8.28:8000';
+  return localStorage.getItem('og_bridge_url') || '';
 };
 
 export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `User request: ${prompt}. 
-    Respond in JSON format only.
-    Structure:
-    {
-      "sql": "SELECT ... FROM tblClients ...",
-      "explanation": "analytical explanation",
-      "visualizationType": "bar" | "line" | "scatter" | "area" | "pie",
-      "xAxis": "field name for x axis",
-      "yAxis": "field name for y axis"
-    }`,
+    contents: `Task: Convert this business question into a 'dbo.' prefixed SQL query for Ultisales.
+    Question: ${prompt}`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
@@ -60,35 +52,49 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
     }
   });
 
-  const geminiResult = JSON.parse(response.text || '{}');
-  const baseUrl = getBridgeUrl().replace(/\/$/, "");
+  let geminiResult = JSON.parse(response.text || '{}');
+  
+  // Safety Interceptor: If the AI slipped up and used 'tbl', fix it locally before execution
+  if (geminiResult.sql && geminiResult.sql.toLowerCase().includes('tbl')) {
+    console.warn("AI used forbidden 'tbl' prefix. Correcting...");
+    geminiResult.sql = geminiResult.sql
+      .replace(/tblStock/gi, 'dbo.STOCK')
+      .replace(/tblAudit/gi, 'dbo.AUDIT')
+      .replace(/tblDebtor/gi, 'dbo.DEBTOR')
+      .replace(/tblCreditor/gi, 'dbo.CREDITOR')
+      .replace(/tblTransactions/gi, 'dbo.TRANSACTIONS')
+      .replace(/tbl/gi, 'dbo.'); // Fallback catch-all
+  }
+
+  const bridgeUrl = getBridgeUrl();
+  if (!bridgeUrl) {
+    return { ...geminiResult, data: [], explanation: "⚠️ Bridge Link required." };
+  }
+
+  const baseUrl = bridgeUrl.replace(/\/$/, "");
 
   try {
     const dbResponse = await fetch(`${baseUrl}/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '69420'
+      },
       body: JSON.stringify({ sql: geminiResult.sql })
     });
 
     if (!dbResponse.ok) {
       const errorData = await dbResponse.json();
-      throw new Error(errorData.detail || 'Backend execution failed');
+      throw new Error(errorData.detail || 'SQL Bridge Error');
     }
 
     const realData = await dbResponse.json();
-
-    return {
-      ...geminiResult,
-      data: realData
-    } as QueryResult;
+    return { ...geminiResult, data: realData || [] } as QueryResult;
   } catch (error: any) {
-    console.error("Bridge Error:", error);
     return {
       ...geminiResult,
       data: [],
-      explanation: `⚠️ SQL generated, but connection to Bridge failed. 
-      Error: ${error.message}. 
-      Check "Live Data Link" settings and ensure Bridge is running.`
+      explanation: `⚠️ SQL Error: ${error.message}. Ensure the Bridge is running and using the Ultisales database.`
     } as QueryResult;
   }
 };
@@ -96,21 +102,16 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight> => {
   if (!queryResult.data || queryResult.data.length === 0) {
     return {
-      summary: "Cannot provide insight because no data was retrieved from the database bridge.",
-      trends: [],
-      anomalies: [],
-      suggestions: ["Check your database connection in the settings panel."]
+      summary: "No results found for the current query parameters.",
+      trends: ["Dataset empty."],
+      anomalies: ["Missing Records"],
+      suggestions: ["Check the date range", "Verify the PLUCode exists"]
     };
   }
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analyze this dataset from the Ultisales database:
-    SQL Query: ${queryResult.sql}
-    Data (sample): ${JSON.stringify(queryResult.data.slice(0, 10))}
-    
-    Identify trends, highlight potential anomalies, and suggest market strategies.
-    Respond in JSON only.`,
+    contents: `Analyze result set: ${JSON.stringify(queryResult.data.slice(0, 10))}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
