@@ -36,9 +36,9 @@ const App: React.FC = () => {
     } catch (err: any) {
       setConnStatus('offline');
       if (window.location.protocol === 'https:' && bridgeUrl.startsWith('http:')) {
-        setErrorDetail("MIXED CONTENT ERROR: Use your https:// ngrok URL.");
+        setErrorDetail("SSL ERROR: You must use the HTTPS ngrok URL on this secure site.");
       } else {
-        setErrorDetail("UNREACHABLE: Check if main.py is running and ngrok is active.");
+        setErrorDetail("UNREACHABLE: Ensure main.py is running and the ngrok tunnel is open.");
       }
     }
   };
@@ -62,46 +62,52 @@ const App: React.FC = () => {
               }`}>
                 <span className="text-3xl">{connStatus === 'online' ? '✅' : '❌'}</span>
               </div>
-              <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Bridge Command Center</h2>
-              <p className="text-slate-500 font-medium italic">Global Link Status: {connStatus === 'online' ? 'ACTIVE' : 'OFFLINE'}</p>
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Bridge Link</h2>
+              <p className="text-slate-500 font-medium italic">Status: {connStatus === 'online' ? 'ACTIVE' : 'OFFLINE'}</p>
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] space-y-8 shadow-2xl">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">Active ngrok URL (HTTPS)</label>
+                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">ngrok HTTPS URL</label>
                 <div className="flex flex-col md:flex-row gap-4">
                   <input 
                     type="text" 
                     value={bridgeUrl}
                     onChange={(e) => setBridgeUrl(e.target.value)}
-                    placeholder="https://xxxx-xxxx.ngrok-free.app"
+                    placeholder="https://xxxx.ngrok-free.app"
                     className="flex-1 bg-black/40 border border-slate-700 rounded-2xl px-6 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
                   />
                   <button onClick={checkConnection} className="px-8 py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-500 transition-all shadow-lg">
-                    Test Link
+                    Re-Sync
                   </button>
                 </div>
                 {errorDetail && (
-                  <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-2xl mt-4 space-y-4">
-                    <p className="text-rose-400 text-xs font-bold uppercase tracking-tight">⚠️ SQL Error 18456 Diagnostic:</p>
-                    <p className="text-[11px] text-slate-300 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10">{errorDetail}</p>
+                  <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-2xl mt-4 space-y-6">
+                    <div className="space-y-2">
+                      <p className="text-rose-400 text-xs font-bold uppercase tracking-tight">⚠️ Connection Issue:</p>
+                      <p className="text-[11px] text-slate-300 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10">{errorDetail}</p>
+                    </div>
                     
                     {(errorDetail.includes('18456') || errorDetail.includes('Login failed')) && (
-                      <div className="space-y-3">
-                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                          <p className="text-[11px] text-amber-400 font-bold uppercase">🎯 USERNAME CHECK</p>
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            The log says "Login failed for OgradyCore". Verify if it should be "OgradrayCore" (with an A) or "OgradyCore". 
-                            Ensure the password in main.py is correct.
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
+                          <p className="text-[11px] text-amber-400 font-bold uppercase mb-2">💡 Why the mapping "unticks":</p>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            You likely have an <b>Orphaned User</b>. The mapping reverts because a user named OgradyCore already exists in the DB but isn't linked to the login.
                           </p>
                         </div>
+                        
                         <div className="p-4 bg-black/60 rounded-xl border border-slate-700">
-                          <p className="text-[10px] font-bold text-white mb-2 uppercase">Fixing Login Issues:</p>
-                          <ul className="text-[10px] text-slate-400 space-y-2 list-disc pl-4">
-                            <li>Open SSMS: Right-click Server - Properties - Security - Select Mixed Mode.</li>
-                            <li>SSMS: Logins - Right-click User - Status - Set to Enabled.</li>
-                            <li>Restart SQL Server (SQLEXPRESS) Service in Windows.</li>
-                          </ul>
+                          <p className="text-[10px] font-bold text-white mb-2 uppercase">Copy & Run in SSMS Query Window:</p>
+                          <pre className="text-[9px] text-emerald-400 bg-black p-3 rounded-lg overflow-x-auto font-mono border border-emerald-500/20">
+{`USE Ultisales;
+GO
+ALTER USER [OgradyCore] WITH LOGIN = [OgradyCore];
+GO
+ALTER ROLE [db_datareader] ADD MEMBER [OgradyCore];
+GO`}
+                          </pre>
+                          <p className="text-[9px] text-slate-500 mt-2 italic">This fixes the mapping without using the buggy GUI checkboxes.</p>
                         </div>
                       </div>
                     )}
@@ -112,19 +118,16 @@ const App: React.FC = () => {
 
             <div className="grid md:grid-cols-3 gap-8">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">1</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Update main.py</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Fix username/password and restart main.py.</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">1. Update Code</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Check main.py username and password.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">2</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Restart Tunnel</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed italic">Verify ngrok is showing green "Online".</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">2. Run SQL Fix</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Run the script above in SSMS to link the user.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">3</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Paste Link</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Copy the HTTPS URL from ngrok and paste it here.</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">3. Restart</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Restart main.py and test the link again.</p>
               </div>
             </div>
           </div>
@@ -144,7 +147,7 @@ const App: React.FC = () => {
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{connStatus.toUpperCase()}</span>
           </div>
           <div className="flex gap-4">
-             <span className="text-[10px] font-mono text-slate-500">{bridgeUrl ? bridgeUrl.substring(0, 30) + "..." : "Link Bridge Now"}</span>
+             <span className="text-[10px] font-mono text-slate-500">{bridgeUrl ? bridgeUrl.substring(0, 30) + "..." : "Offline"}</span>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
