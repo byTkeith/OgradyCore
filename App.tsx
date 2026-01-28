@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -22,19 +23,21 @@ const App: React.FC = () => {
           'ngrok-skip-browser-warning': '69420'
         }
       });
-      if (res.ok) {
+      const data = await res.json();
+      
+      if (res.ok && data.status === 'online') {
         setConnStatus('online');
         localStorage.setItem('og_bridge_url', bridgeUrl);
       } else {
         setConnStatus('offline');
-        setErrorDetail('The bridge is reachable, but the database connection inside it failed.');
+        setErrorDetail(data.message || 'The bridge is reachable, but the database rejected the login.');
       }
     } catch (err: any) {
       setConnStatus('offline');
       if (window.location.protocol === 'https:' && bridgeUrl.startsWith('http:')) {
-        setErrorDetail("MIXED CONTENT BLOCK: You are on an HTTPS site but your bridge is HTTP. You MUST use an ngrok 'https://' URL to fix this.");
+        setErrorDetail("MIXED CONTENT: Vercel is HTTPS. You MUST use your ngrok 'https://' URL.");
       } else {
-        setErrorDetail("UNREACHABLE: Ensure main.py is running and your ngrok tunnel is open.");
+        setErrorDetail("UNREACHABLE: Check main.py and your ngrok tunnel status.");
       }
     }
   };
@@ -59,30 +62,41 @@ const App: React.FC = () => {
                 <span className="text-3xl">{connStatus === 'online' ? '✅' : '❌'}</span>
               </div>
               <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Bridge Command Center</h2>
-              <p className="text-slate-500 font-medium italic">Global Link Status: {connStatus === 'online' ? 'ACTIVE' : 'INACTIVE'}</p>
+              <p className="text-slate-500 font-medium italic">Status: {connStatus === 'online' ? 'GLOBAL ACCESS ACTIVE' : 'CONNECTION ERROR'}</p>
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] space-y-8 shadow-2xl">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">Bridge Endpoint (Must be HTTPS for Vercel)</label>
+                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">Active ngrok HTTPS Endpoint</label>
                 <div className="flex flex-col md:flex-row gap-4">
                   <input 
                     type="text" 
                     value={bridgeUrl}
                     onChange={(e) => setBridgeUrl(e.target.value)}
-                    placeholder="https://xxxx-xxxx.ngrok-free.app"
-                    className="flex-1 bg-black/40 border border-slate-700 rounded-2xl px-6 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 transition-all"
+                    placeholder="https://your-unique-id.ngrok-free.dev"
+                    className="flex-1 bg-black/40 border border-slate-700 rounded-2xl px-6 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
                   />
-                  <button 
-                    onClick={checkConnection}
-                    className="px-8 py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-500 transition-all shadow-lg"
-                  >
-                    Save & Test
+                  <button onClick={checkConnection} className="px-8 py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-500 shadow-lg transition-all">
+                    Link & Test
                   </button>
                 </div>
                 {errorDetail && (
-                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl mt-4">
-                    <p className="text-rose-400 text-[11px] font-bold uppercase tracking-tight">⚠️ {errorDetail}</p>
+                  <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-2xl mt-4 space-y-4">
+                    <p className="text-rose-400 text-[11px] font-bold uppercase tracking-tight">⚠️ Server Reported: {errorDetail}</p>
+                    
+                    {errorDetail.includes('18456') && (
+                      <div className="bg-black/40 p-4 rounded-xl space-y-3 border border-rose-500/20">
+                        <p className="text-xs font-bold text-white">How to fix Login Error 18456:</p>
+                        <ol className="text-[11px] text-slate-400 space-y-1 list-decimal pl-4">
+                          <li>Open SSMS on your server.</li>
+                          <li>Right-click Server -> Properties -> Security -> Select <b>"SQL Server and Windows Authentication"</b>.</li>
+                          <li>Go to Security -> Logins -> <b>OgradrayCore</b> -> Properties.</li>
+                          <li>In <b>Status</b>, set Login to <b>Enabled</b>.</li>
+                          <li>In <b>User Mapping</b>, check <b>Ultisales</b> and select <b>db_datareader</b>.</li>
+                          <li><b>Restart</b> the SQL Server (SQLEXPRESS) service.</li>
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -91,32 +105,19 @@ const App: React.FC = () => {
             <div className="grid md:grid-cols-3 gap-8">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">1</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Start Bridge</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Run <code className="text-emerald-500">python main.py</code> in your project folder.</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Run main.py</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Starts the local API gateway.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">2</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Tunnel Command</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed italic">If 'ngrok' is not recognized, put ngrok.exe in the folder and run:</p>
-                <code className="block bg-black p-2 rounded text-[10px] text-emerald-400">.\ngrok.exe http 8000</code>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Run ngrok</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed italic">Creates the public HTTPS tunnel.</p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">3</div>
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">Sync Globally</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Copy the HTTPS URL from the ngrok window and paste it into the box above.</p>
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Connect</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">Paste the URL above to link the global UI.</p>
               </div>
-            </div>
-
-            <div className="bg-slate-900/80 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-              <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Vercel Framework Configuration</h4>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                When you import this project into Vercel, use the following settings:
-              </p>
-              <ul className="text-[11px] text-slate-500 space-y-2 list-disc pl-4">
-                <li>Framework Preset: <span className="text-white font-bold italic">Vite</span></li>
-                <li>Root Directory: <span className="text-white font-bold italic">./</span></li>
-                <li>Environment Variables: Add <span className="text-emerald-500 font-bold">API_KEY</span> with your Google Gemini Key.</li>
-              </ul>
             </div>
           </div>
         );
@@ -133,7 +134,6 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
             <div className={`w-2 h-2 rounded-full ${connStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{connStatus.toUpperCase()}</span>
-            <span className="text-[10px] font-mono text-slate-500 truncate max-w-[200px]">{bridgeUrl}</span>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
