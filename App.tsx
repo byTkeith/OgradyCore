@@ -18,6 +18,13 @@ const App: React.FC = () => {
     
     setConnStatus('testing');
     setErrorDetail(null);
+
+    if (window.location.protocol === 'https:' && bridgeUrl.startsWith('http:')) {
+      setConnStatus('offline');
+      setErrorDetail("MIXED CONTENT: Secure sites cannot talk to 'http://'. You MUST use an 'https://' ngrok URL.");
+      return;
+    }
+
     const baseUrl = bridgeUrl.replace(/\/$/, "");
     try {
       const res = await fetch(`${baseUrl}/health`, {
@@ -31,15 +38,11 @@ const App: React.FC = () => {
         localStorage.setItem('og_bridge_url', bridgeUrl);
       } else {
         setConnStatus('offline');
-        setErrorDetail(data.message || 'The bridge is reachable, but the database rejected the login.');
+        setErrorDetail(data.message || 'Unknown error from bridge health check.');
       }
     } catch (err: any) {
       setConnStatus('offline');
-      if (window.location.protocol === 'https:' && bridgeUrl.startsWith('http:')) {
-        setErrorDetail("SSL ERROR: You must use the HTTPS ngrok URL on this secure site.");
-      } else {
-        setErrorDetail("UNREACHABLE: Ensure main.py is running and the ngrok tunnel is open.");
-      }
+      setErrorDetail(`UNREACHABLE: Failed to connect to ${bridgeUrl}. Ensure main.py is running and the ngrok tunnel is open.`);
     }
   };
 
@@ -60,15 +63,15 @@ const App: React.FC = () => {
               <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center border-2 transition-all duration-1000 ${
                 connStatus === 'online' ? 'bg-emerald-500/10 border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.2)]' : 'bg-rose-500/10 border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.1)]'
               }`}>
-                <span className="text-3xl">{connStatus === 'online' ? '✅' : '❌'}</span>
+                <span className="text-3xl">{connStatus === 'online' ? '✅' : '🔗'}</span>
               </div>
               <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Bridge Link</h2>
-              <p className="text-slate-500 font-medium italic">Status: {connStatus === 'online' ? 'ACTIVE' : 'OFFLINE'}</p>
+              <p className="text-slate-500 font-medium italic">Current Link Status: {connStatus.toUpperCase()}</p>
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] space-y-8 shadow-2xl">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">ngrok HTTPS URL</label>
+                <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-1">Secure ngrok HTTPS URL</label>
                 <div className="flex flex-col md:flex-row gap-4">
                   <input 
                     type="text" 
@@ -78,36 +81,29 @@ const App: React.FC = () => {
                     className="flex-1 bg-black/40 border border-slate-700 rounded-2xl px-6 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
                   />
                   <button onClick={checkConnection} className="px-8 py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-500 transition-all shadow-lg">
-                    Re-Sync
+                    Validate Sync
                   </button>
                 </div>
+                
                 {errorDetail && (
                   <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-2xl mt-4 space-y-6">
-                    <div className="space-y-2">
-                      <p className="text-rose-400 text-xs font-bold uppercase tracking-tight">⚠️ Connection Issue:</p>
-                      <p className="text-[11px] text-slate-300 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10">{errorDetail}</p>
+                    <div>
+                      <p className="text-rose-400 text-xs font-bold uppercase mb-2">Detailed Log:</p>
+                      <p className="text-[10px] text-slate-300 font-mono bg-black/40 p-4 rounded-lg border border-rose-500/10 leading-relaxed overflow-x-auto">
+                        {errorDetail}
+                      </p>
                     </div>
-                    
-                    {(errorDetail.includes('18456') || errorDetail.includes('Login failed')) && (
-                      <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
-                          <p className="text-[11px] text-amber-400 font-bold uppercase mb-2">💡 Orphaned User Fix:</p>
-                          <p className="text-[10px] text-slate-400 leading-relaxed">
-                            If your database mapping "unticks" in SSMS, it's an orphaned user. Run this script in a New Query window in SSMS:
-                          </p>
-                        </div>
-                        
-                        <div className="p-4 bg-black/60 rounded-xl border border-slate-700">
-                          <p className="text-[10px] font-bold text-white mb-2 uppercase">Copy & Run in SSMS Query Window:</p>
-                          <pre className="text-[9px] text-emerald-400 bg-black p-3 rounded-lg overflow-x-auto font-mono border border-emerald-500/20">
-{`USE Ultisales;
-GO
-ALTER USER [OgradrayCore] WITH LOGIN = [OgradrayCore];
-GO
-ALTER ROLE [db_datareader] ADD MEMBER [OgradrayCore];
-GO`}
-                          </pre>
-                        </div>
+
+                    {errorDetail.includes('18456') && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 p-5 rounded-2xl space-y-4 animate-in fade-in zoom-in duration-500">
+                        <p className="text-[11px] font-black text-amber-400 uppercase tracking-widest">🛑 Action Required in SSMS:</p>
+                        <ol className="text-[10px] text-slate-300 space-y-2 list-decimal ml-4">
+                          <li>Open SSMS, Right-Click <b>{bridgeUrl.includes('localhost') ? 'Server' : 'SQLEXPRESS'}</b> &gt; <b>Properties</b>.</li>
+                          <li>Go to <b>Security</b> page.</li>
+                          <li>Select <b>"SQL Server and Windows Authentication mode"</b> (Mixed Mode).</li>
+                          <li>Click OK, then <b>Restart the SQL Server service</b>.</li>
+                          <li>Verify OgradyCore login has mapping to <b>Ultisales</b>.</li>
+                        </ol>
                       </div>
                     )}
                   </div>
@@ -115,18 +111,22 @@ GO`}
               </div>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">1. Spelling Check</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Ensure you use OgradrayCore (with an 'a') in main.py.</p>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-3">
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Server Connection</h4>
+                <div className="space-y-1 font-mono text-[11px] text-slate-500">
+                  <p>IP: 192.168.8.28</p>
+                  <p>PORT: 54927</p>
+                  <p>USER: OgradyCore</p>
+                </div>
               </div>
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">2. Run SQL Fix</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Run the ALTER USER script above to link the login.</p>
-              </div>
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-4">
-                <h4 className="text-xs font-black text-white uppercase tracking-widest">3. Restart</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Restart main.py and click Re-Sync above.</p>
+              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] space-y-3">
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Database Settings</h4>
+                <div className="space-y-1 font-mono text-[11px] text-slate-500">
+                  <p>DB: Ultisales</p>
+                  <p>DRIVER: ODBC 17</p>
+                  <p>TIMEOUT: 30s</p>
+                </div>
               </div>
             </div>
           </div>
@@ -144,9 +144,6 @@ GO`}
           <div className="flex items-center gap-6">
             <div className={`w-2 h-2 rounded-full ${connStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 animate-pulse'}`}></div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{connStatus.toUpperCase()}</span>
-          </div>
-          <div className="flex gap-4">
-             <span className="text-[10px] font-mono text-slate-500">{bridgeUrl ? bridgeUrl.substring(0, 30) + "..." : "Offline"}</span>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
