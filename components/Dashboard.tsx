@@ -21,7 +21,12 @@ const Dashboard: React.FC = () => {
   });
 
   const fetchLiveStats = async () => {
-    const bridgeUrl = localStorage.getItem('og_bridge_url') || 'http://192.168.8.28:8000';
+    const bridgeUrl = localStorage.getItem('og_bridge_url');
+    if (!bridgeUrl) {
+      setLiveStats(prev => ({ ...prev, status: 'offline' }));
+      return;
+    }
+    
     const baseUrl = bridgeUrl.replace(/\/$/, "");
 
     try {
@@ -43,7 +48,7 @@ const Dashboard: React.FC = () => {
       const [cCount, sCount, iCount] = await Promise.all([
         fetchCount("SELECT COUNT(*) as count FROM tblClients"),
         fetchCount("SELECT COUNT(*) as count FROM tblStock"),
-        fetchCount("SELECT COUNT(*) as count FROM tblInvoices WHERE INVOICEDATE >= DATEADD(month, -1, GETDATE())")
+        fetchCount("SELECT COUNT(*) as count FROM tblInvoices")
       ]);
 
       setLiveStats({
@@ -69,7 +74,7 @@ const Dashboard: React.FC = () => {
         <div>
           <h1 className="text-4xl font-black text-white tracking-tighter">OgradyCore <span className="text-emerald-500 font-light">Overview</span></h1>
           <p className="text-slate-500 mt-2 font-medium italic">
-            {liveStats.status === 'offline' ? '⚠️ Dashboard Bridge Offline' : 'Real-time performance metrics'}
+            {liveStats.status === 'offline' ? '⚠️ Sync URL Required in Data Link' : 'Real-time performance metrics'}
           </p>
         </div>
       </header>
@@ -78,7 +83,7 @@ const Dashboard: React.FC = () => {
         {[
           { label: 'Total Clients', value: liveStats.clients },
           { label: 'Active Stock', value: liveStats.stockItems },
-          { label: 'Recent Invoices', value: liveStats.recentInvoices },
+          { label: 'Total Invoices', value: liveStats.recentInvoices },
           { label: 'Health', value: liveStats.status.toUpperCase() }
         ].map((stat, i) => (
           <div key={i} className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem]">
@@ -89,13 +94,17 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 h-[28rem]">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter">Performance Velocity</h2>
+          <span className="text-[10px] text-slate-500 font-bold uppercase">Sample Data Projection</span>
+        </div>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={mockSalesData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
             <XAxis dataKey="month" stroke="#475569" fontSize={11} />
             <YAxis stroke="#475569" fontSize={11} />
-            <Tooltip contentStyle={{ backgroundColor: '#020617', borderRadius: '16px' }} />
-            <Area type="monotone" dataKey="sales" stroke="#10b981" fill="#10b98144" strokeWidth={5} />
+            <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '16px' }} />
+            <Area type="monotone" dataKey="sales" stroke="#10b981" fill="#10b98111" strokeWidth={5} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
