@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>OgradyCore Analyst Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,10 +12,13 @@
             font-family: 'Inter', sans-serif;
             background-color: #020617;
             color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
-        /* Custom scrollbar for a sleek look */
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         ::-webkit-scrollbar-track {
             background: #0f172a;
@@ -26,6 +29,11 @@
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #334155;
+        }
+        #root {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
     </style>
 <script type="importmap">
@@ -42,9 +50,8 @@
 }
 </script>
 </head>
-<body class="overflow-hidden">
+<body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
-
