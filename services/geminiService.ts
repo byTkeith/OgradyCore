@@ -1,117 +1,170 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SCHEMA_MAP, DEFAULT_BRIDGE_URL } from "../constants";
-import { QueryResult, AnalystInsight } from "../types";
+import { DEFAULT_BRIDGE_URL } from "../constants";
+import { QueryResult, AnalystInsight, AIProvider } from "../types";
 
-// Initialize Gemini SDK
+// Gemini SDK Setup
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 You are 'OgradyCore AI', a specialized BI Analyst for 'Ultisales' MSSQL databases.
-PRIMARY CONTEXT: Fiscal Year 2026. FALLBACK: 2025.
-Focus on providing high-impact strategic business diagnostics.
+THE CURRENT FISCAL YEAR IS 2026. Fallback comparison year is 2025.
+Always use 'dbo.' and UPPERCASE for tables. 
+Join AUDIT.PLUCode to STOCK.Barcode.
+Ensure all SQL queries are optimized for MSSQL and provide 100% accurate data retrieval.
+Return ONLY JSON when requested. 
+For SQL generation: Use keys 'sql', 'explanation', 'visualizationType' (bar, line, pie, area), 'xAxis', 'yAxis'.
 `;
 
-const getBridgeUrl = () => localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
+const getSettings = () => ({
+  provider: (localStorage.getItem('og_ai_provider') as AIProvider) || 'AUTO',
+  ollamaUrl: localStorage.getItem('og_ollama_url') || 'http://localhost:11434',
+  ollamaModel: localStorage.getItem('og_ollama_model') || 'llama3.1:8b',
+  bridgeUrl: localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL
+});
 
 /**
- * Uses the faster, higher-quota Flash model for dashboard summaries.
- * Returns null on quota error to trigger local fallback.
+ * Clean AI Output: Reasoning models like DeepSeek-R1 wrap thoughts in <think> tags.
+ * We must remove these to extract the clean JSON or Text.
  */
-export const generateStrategicBrief = async (data: any): Promise<string | null> => {
+function cleanAiResponse(raw: string): string {
+  // Remove <think>...</think> blocks
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // If we are looking for JSON, try to find the first '{' and last '}'
+  if (cleaned.includes('{') && cleaned.includes('}')) {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+  return cleaned;
+}
+
+/**
+ * Ollama Bridge: Local execution to bypass cloud quota
+ */
+async function callOllama(prompt: string, json: boolean = false) {
+  const { ollamaUrl, ollamaModel } = getSettings();
+  try {
+    const response = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        model: ollamaModel,
+        prompt: `${SYSTEM_INSTRUCTION}\n\nTask: ${prompt}`,
+        stream: false,
+        format: json ? 'json' : undefined
+      }),
+    });
+    if (!response.ok) throw new Error("OLLAMA_HTTP_ERROR");
+    const data = await response.json();
+    return cleanAiResponse(data.response);
+  } catch (e) {
+    console.error("Ollama offline or unreachable at:", ollamaUrl);
+    throw new Error("OLLAMA_OFFLINE");
+  }
+}
+
+/**
+ * Hybrid Execution Core: Automatically routes to Ollama if Gemini fails
+ */
+async function smartExecute(task: string, model: 'flash' | 'pro', json: boolean = false) {
+  const settings = getSettings();
+  const modelName = model === 'flash' ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview';
+
+  // 1. Direct Ollama if explicitly set
+  if (settings.provider === 'OLLAMA') {
+    return { response: await callOllama(task, json), engine: 'OLLAMA' };
+  }
+
+  // 2. Try Gemini first (or if AUTO)
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Summarize BI data for ${data.activeYear}: ${JSON.stringify(data.kpis)}. 2 sentences max.`,
-      config: { systemInstruction: SYSTEM_INSTRUCTION }
+      model: modelName,
+      contents: task,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: json ? "application/json" : undefined
+      }
     });
-    return response.text || null;
+    return { response: response.text, engine: 'GEMINI' };
+  } catch (error: any) {
+    const isQuotaError = error?.message?.includes("429") || error?.status === 429;
+    
+    // 3. Auto-fallback to Ollama on Gemini failure
+    if (settings.provider === 'AUTO' || isQuotaError) {
+      console.warn("Gemini limit reached or auto-fallback active. Routing to local Ollama...");
+      try {
+        const localRes = await callOllama(task, json);
+        return { response: localRes, engine: 'OLLAMA' };
+      } catch (ollamaErr) {
+        throw new Error(isQuotaError ? "GEMINI_QUOTA_EXCEEDED_AND_OLLAMA_OFFLINE" : "AI_NETWORK_FAILURE");
+      }
+    }
+    throw error;
+  }
+}
+
+export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
+  const prompt = `Summarize BI data for ${data.activeYear}: ${JSON.stringify(data.kpis)}. 2 sentences max. Focus on growth vs 2025.`;
+  try {
+    const { response, engine } = await smartExecute(prompt, 'flash');
+    return { text: response || "", engine };
   } catch (error) {
-    console.warn("AI Quota Limit Reached: Falling back to local computation.");
     return null;
   }
 };
 
-/**
- * High-precision reasoning model for SKU analysis.
- */
-export const getDrilldownAnalysis = async (item: any): Promise<string> => {
+export const getDrilldownAnalysis = async (item: any): Promise<{text: string, engine: string}> => {
+  const prompt = `SKU: ${item.Description}. Sold: ${item.sold}, Stock: ${item.stock}. Performance diagnostic?`;
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `SKU: ${item.Description}. Sold: ${item.sold}, Stock: ${item.stock}. Diagnostics?`,
-      config: { systemInstruction: SYSTEM_INSTRUCTION }
-    });
-    return response.text || "Analysis complete. See local metrics.";
+    const { response, engine } = await smartExecute(prompt, 'pro');
+    return { text: response || "", engine };
   } catch (error) {
-    return "AI Analyst currently over-capacity. Local metrics show " + 
-           (item.sold > item.stock ? "high velocity relative to stock." : "stable inventory position.");
+    return { text: "Strategic insight paused. Manual stock review suggested.", engine: "LOCAL_SQL" };
   }
 };
 
-export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Request: ${prompt}. Current Year: 2026. Generate accurate MSSQL.`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            sql: { type: Type.STRING },
-            explanation: { type: Type.STRING },
-            visualizationType: { type: Type.STRING },
-            xAxis: { type: Type.STRING },
-            yAxis: { type: Type.STRING }
-          },
-          required: ["sql", "explanation", "visualizationType", "xAxis", "yAxis"]
-        }
-      }
-    });
+export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string }> => {
+  const settings = getSettings();
+  const task = `Request: ${prompt}. Current Year: 2026. Generate JSON for Ultisales.`;
 
-    let geminiResult = JSON.parse(response.text || '{}');
-    const baseUrl = getBridgeUrl().replace(/\/$/, "");
+  const { response, engine } = await smartExecute(task, 'pro', true);
+  
+  try {
+    let result = JSON.parse(response || '{}');
+    
+    // Sanitization for MSSQL Compatibility
+    if (result.sql) {
+      result.sql = result.sql
+        .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
+        .replace(/tbl/gi, 'dbo.')
+        .replace(/dbo\.(\w+)/g, (match: string) => match.toUpperCase())
+        .replace(/DBO\./g, 'dbo.');
+    }
+
+    const baseUrl = settings.bridgeUrl.replace(/\/$/, "");
     const dbResponse = await fetch(`${baseUrl}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
-      body: JSON.stringify({ sql: geminiResult.sql })
+      body: JSON.stringify({ sql: result.sql })
     });
     const realData = await dbResponse.json();
-    return { ...geminiResult, data: realData || [] } as QueryResult;
-  } catch (error: any) {
-    throw new Error(error.message.includes("429") ? "QUOTA_EXCEEDED" : error.message);
+    
+    return { ...result, data: realData || [], engine };
+  } catch (e) {
+    console.error("Failed to parse AI response as JSON:", response);
+    throw new Error("AI_INVALID_FORMAT");
   }
 };
 
-export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight> => {
+export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
+  const task = `Analyze this dataset: ${JSON.stringify(queryResult.data.slice(0, 15))}. Provide JSON insights.`;
+  const { response, engine } = await smartExecute(task, 'pro', true);
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Analyze: ${JSON.stringify(queryResult.data.slice(0, 15))}`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: { type: Type.STRING },
-            trends: { type: Type.ARRAY, items: { type: Type.STRING } },
-            anomalies: { type: Type.ARRAY, items: { type: Type.STRING } },
-            suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["summary", "trends", "anomalies", "suggestions"]
-        }
-      }
-    });
-    return JSON.parse(response.text || '{}') as AnalystInsight;
-  } catch (error) {
+    return { ...JSON.parse(response || '{}'), engine };
+  } catch (e) {
     return {
-      summary: "Local Data analysis: Data retrieval successful. AI narrative generation is currently rate-limited.",
-      trends: ["Data visibility active", "SQL Bridge connected"],
-      anomalies: ["AI service quota reached"],
-      suggestions: ["Review raw data in the bridge explorer"]
+      summary: "Data retrieved, but AI narration format was invalid.",
+      trends: [], anomalies: [], suggestions: [], engine
     };
   }
 };
