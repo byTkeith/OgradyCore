@@ -33,8 +33,10 @@ const ChatInterface: React.FC = () => {
       setResults(prev => [...prev, { query: currentQuery, result: qResult, insight, engine: qResult.engine }]);
     } catch (err: any) {
       console.error("Self-Sufficient Intelligence Error:", err);
-      if (err.message === "GEMINI_QUOTA_EXCEEDED_AND_OLLAMA_OFFLINE") {
-        setError("Dual Intelligence failure: Gemini quota reached and local Ollama server is offline. Please start Ollama locally.");
+      if (err.message === "LOCAL_CONNECTION_REFUSED") {
+        setError("Local Intelligence Refused: Your browser cannot reach the Ollama server. If the server is on another computer, go to Bridge Link and change 'localhost' to the server's IP address (e.g. http://192.168.8.28:11434).");
+      } else if (err.message === "GEMINI_QUOTA_EXCEEDED_AND_OLLAMA_OFFLINE") {
+        setError("Dual Intelligence failure: Gemini quota reached and local Ollama server is offline. Please check your Ollama status.");
       } else if (err.message === "OLLAMA_OFFLINE") {
         setError("Local Intelligence (Ollama) unreachable. Check your settings or server status.");
       } else {
