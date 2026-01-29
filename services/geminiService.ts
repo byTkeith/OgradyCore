@@ -32,10 +32,6 @@ function cleanAiResponse(raw: string): string {
   return cleaned;
 }
 
-/**
- * Optimized callOllama: Now routes through the Bridge Proxy
- * to ensure worldwide availability via the server's resources.
- */
 async function callOllama(prompt: string, json: boolean = false) {
   const { bridgeUrl, ollamaModel } = getSettings();
   const baseUrl = bridgeUrl.replace(/\/$/, "");
@@ -64,7 +60,7 @@ async function callOllama(prompt: string, json: boolean = false) {
     return cleanAiResponse(data.response);
   } catch (e: any) {
     console.error("Bridge AI unreachable:", e.message);
-    throw new Error("OLLAMA_PROXY_OFFLINE");
+    throw new Error(e.message || "OLLAMA_PROXY_OFFLINE");
   }
 }
 
@@ -130,6 +126,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   try {
     let result = JSON.parse(response || '{}');
     if (result.sql) {
+      // Common AI hallucination fixes for Ultisales schema
       result.sql = result.sql
         .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
         .replace(/tbl/gi, 'dbo.')
@@ -143,16 +140,29 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
       body: JSON.stringify({ sql: result.sql })
     });
+
+    if (!dbResponse.ok) {
+      const err = await dbResponse.json();
+      throw new Error(err.detail || "Database request failed");
+    }
+
     const realData = await dbResponse.json();
     
-    return { ...result, data: realData || [], engine };
-  } catch (e) {
+    // Ensure data is always an array
+    const finalizedData = Array.isArray(realData) ? realData : [];
+    
+    return { ...result, data: finalizedData, engine };
+  } catch (e: any) {
+    console.error("Analysis Error:", e);
     throw e;
   }
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
-  const task = `Analyze this dataset: ${JSON.stringify(queryResult.data.slice(0, 15))}. Provide JSON insights.`;
+  // Safety check: ensure data exists and is an array before trying to slice
+  const safeData = Array.isArray(queryResult.data) ? queryResult.data : [];
+  const task = `Analyze this dataset: ${JSON.stringify(safeData.slice(0, 15))}. Provide JSON insights.`;
+  
   const { response, engine } = await smartExecute(task, 'pro', true);
   try {
     return { ...JSON.parse(response || '{}'), engine };
