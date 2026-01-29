@@ -4,12 +4,13 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
 import { AppSection } from './types';
+import { DEFAULT_BRIDGE_URL } from './constants';
 
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
   const [connStatus, setConnStatus] = useState<'testing' | 'online' | 'offline'>('testing');
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  const [bridgeUrl, setBridgeUrl] = useState(localStorage.getItem('og_bridge_url') || '');
+  const [bridgeUrl, setBridgeUrl] = useState(localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const checkConnection = useCallback(async (urlOverride?: string) => {
@@ -111,10 +112,13 @@ const App: React.FC = () => {
                       {connStatus === 'testing' ? 'Verifying...' : 'Validate Link'}
                     </button>
                     <button 
-                      onClick={() => { setConnStatus('offline'); setErrorDetail(null); }} 
+                      onClick={() => { 
+                        setBridgeUrl(DEFAULT_BRIDGE_URL);
+                        handleUpdateBridge(DEFAULT_BRIDGE_URL);
+                      }} 
                       className="py-4 bg-slate-800 text-slate-400 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-slate-700 transition-all"
                     >
-                      Clear State
+                      Restore Default
                     </button>
                   </div>
                 </div>

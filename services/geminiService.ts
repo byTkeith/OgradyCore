@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SCHEMA_MAP } from "../constants";
+import { SCHEMA_MAP, DEFAULT_BRIDGE_URL } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -33,7 +33,7 @@ Only generate the SQL SELECT statement. If the user asks for a comparison, perfo
 `;
 
 const getBridgeUrl = () => {
-  return localStorage.getItem('og_bridge_url') || '';
+  return localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
 };
 
 export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {

@@ -63,3 +63,5 @@ export const SCHEMA_MAP = {
 };
 
 export const MOCK_CHART_COLORS = ['#10b981', '#34d399', '#059669', '#047857', '#065f46', '#064e3b'];
+
+export const DEFAULT_BRIDGE_URL = 'https://unpanoplied-marianne-ciliately.ngrok-free.dev';

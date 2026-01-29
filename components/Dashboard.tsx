@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { DEFAULT_BRIDGE_URL } from '../constants';
 
 interface VelocityPoint {
   date: string;
@@ -19,7 +20,7 @@ const Dashboard: React.FC = () => {
   const [velocityData, setVelocityData] = useState<VelocityPoint[]>([]);
 
   const fetchLiveStats = useCallback(async () => {
-    const bridgeUrl = localStorage.getItem('og_bridge_url');
+    const bridgeUrl = localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
     if (!bridgeUrl) {
       setLiveStats(prev => ({ ...prev, status: 'offline' }));
       return;
