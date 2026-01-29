@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface VelocityPoint {
@@ -8,6 +8,7 @@ interface VelocityPoint {
 }
 
 const Dashboard: React.FC = () => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [liveStats, setLiveStats] = useState({
     clients: '...',
     stockItems: '...',
@@ -17,13 +18,14 @@ const Dashboard: React.FC = () => {
   
   const [velocityData, setVelocityData] = useState<VelocityPoint[]>([]);
 
-  const fetchLiveStats = async () => {
+  const fetchLiveStats = useCallback(async () => {
     const bridgeUrl = localStorage.getItem('og_bridge_url');
     if (!bridgeUrl) {
       setLiveStats(prev => ({ ...prev, status: 'offline' }));
       return;
     }
     
+    setIsRefreshing(true);
     const baseUrl = bridgeUrl.replace(/\/$/, "");
 
     try {
@@ -72,54 +74,62 @@ const Dashboard: React.FC = () => {
       } else {
         setVelocityData([]);
       }
-
     } catch (e) {
       setLiveStats(prev => ({ ...prev, status: 'offline' }));
+    } finally {
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchLiveStats();
-    const interval = setInterval(fetchLiveStats, 60000);
+    const interval = setInterval(fetchLiveStats, 120000); // Auto refresh every 2 mins
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchLiveStats]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-10 overflow-y-auto h-full pb-32 custom-scrollbar">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase">Ultisales <span className="text-emerald-500 font-light italic underline decoration-emerald-500/30">Live</span></h1>
-          <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium italic">
-            {liveStats.status === 'offline' ? '⚠️ Waiting for sync bridge...' : 'Direct schema telemetry active'}
+          <h1 className="text-2xl md:text-4xl font-black text-white tracking-tighter uppercase">Ultisales <span className="text-emerald-500 font-light italic">Sync</span></h1>
+          <p className="text-slate-500 text-[10px] md:text-xs mt-1 font-bold uppercase tracking-widest">
+            {liveStats.status === 'offline' ? '⚠️ Waiting for sync bridge' : 'Direct schema telemetry'}
           </p>
         </div>
+        <button 
+          onClick={fetchLiveStats} 
+          disabled={isRefreshing}
+          className={`p-2 rounded-xl border border-slate-800 bg-slate-900 transition-all ${isRefreshing ? 'opacity-50 animate-spin' : 'hover:border-emerald-500/50'}`}
+        >
+          <span className="text-lg">🔄</span>
+        </button>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {[
           { label: 'Debtors', value: liveStats.clients, icon: '👥' },
           { label: 'Products', value: liveStats.stockItems, icon: '📦' },
-          { label: 'Audit Log', value: liveStats.recentTrans, icon: '📜' },
-          { label: 'Health', value: liveStats.status === 'online' ? 'UP' : 'DOWN', icon: '📡' }
+          { label: 'History', value: liveStats.recentTrans, icon: '📜' },
+          { label: 'Health', value: liveStats.status === 'online' ? 'UP' : 'ERR', icon: '📡' }
         ].map((stat, i) => (
           <div key={i} className="bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl md:rounded-[2rem] hover:border-emerald-500/30 transition-all duration-500">
             <div className="flex justify-between items-start mb-2">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
-              <span className="text-sm">{stat.icon}</span>
+              <span className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
+              <span className="text-xs md:text-sm">{stat.icon}</span>
             </div>
-            <h3 className="text-xl md:text-3xl font-black text-emerald-400">{stat.value}</h3>
+            <h3 className="text-lg md:text-3xl font-black text-emerald-400 truncate">{stat.value}</h3>
           </div>
         ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl md:rounded-[3rem] p-6 md:p-10 min-h-[24rem] shadow-2xl flex flex-col">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-[3rem] p-5 md:p-10 min-h-[24rem] shadow-2xl flex flex-col">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-8">
           <div>
-            <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter">Daily Revenue Velocity</h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Aggregated Value (30d)</p>
+            <h2 className="text-lg md:text-2xl font-black text-white uppercase tracking-tighter">Daily Revenue Velocity</h2>
+            <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Aggregated Value (Last 30 Days)</p>
           </div>
           {velocityData.length === 0 && liveStats.status === 'online' && (
-            <span className="text-[9px] text-amber-500 font-black uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">Empty Audit Trail</span>
+            <span className="text-[8px] md:text-[9px] text-amber-500 font-black uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">Empty AUDIT.Log</span>
           )}
         </div>
         
@@ -138,13 +148,14 @@ const Dashboard: React.FC = () => {
                 <YAxis stroke="#475569" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v}`} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} 
+                  itemStyle={{ color: '#10b981' }}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#colorRevenue)" strokeWidth={3} />
+                <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#colorRevenue)" strokeWidth={3} animationDuration={1000} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-slate-800 rounded-2xl bg-black/20 p-6 text-center">
-              <p className="text-slate-600 font-black uppercase tracking-widest text-[10px]">No sales recorded in the last 30 days</p>
+              <p className="text-slate-600 font-black uppercase tracking-widest text-[9px]">No Transactional data detected in the last 30 days</p>
             </div>
           )}
         </div>
