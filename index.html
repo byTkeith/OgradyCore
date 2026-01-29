@@ -40,6 +40,19 @@
             scrollbar-width: thin;
             scrollbar-color: #1e293b #0f172a;
         }
+
+        @media print {
+            body { background: white !important; color: black !important; }
+            .print\:hidden { display: none !important; }
+            aside, header, nav, form, button { display: none !important; }
+            main { padding: 0 !important; width: 100% !important; margin: 0 !important; }
+            .bg-slate-900, .bg-slate-950, .bg-slate-800 { background: white !important; border-color: #eee !important; color: black !important; }
+            .text-white, .text-slate-100 { color: black !important; }
+            .text-emerald-500, .text-blue-500, .text-rose-500 { color: #333 !important; }
+            canvas { filter: grayscale(1) !important; }
+            .rounded-\[3rem\], .rounded-\[2rem\] { border-radius: 0 !important; border: 1px solid #ddd !important; }
+            .shadow-2xl, .shadow-xl { box-shadow: none !important; }
+        }
     </style>
 <script type="importmap">
 {

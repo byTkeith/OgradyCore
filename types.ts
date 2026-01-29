@@ -19,6 +19,14 @@ export interface AnalystInsight {
   suggestions: string[];
 }
 
+export interface DashboardMetric {
+  label: string;
+  value: string | number;
+  change: number;
+  trend: 'up' | 'down' | 'neutral';
+  icon: string;
+}
+
 export enum AppSection {
   DASHBOARD = 'DASHBOARD',
   ANALYST_CHAT = 'ANALYST_CHAT',

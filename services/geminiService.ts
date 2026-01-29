@@ -3,44 +3,37 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SCHEMA_MAP, DEFAULT_BRIDGE_URL } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Fixed: Correct initialization of GoogleGenAI using direct process.env.API_KEY as per guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 You are 'OgradyCore AI', a specialized BI Analyst for 'Ultisales' MSSQL databases.
-
-⚠️ KNOWLEDGE BASE (From Developer Docs):
-- TABLE PREFIX: Always use 'dbo.' and UPPERCASE (e.g., dbo.AUDIT).
-- METADATA: Use dbo.TYPES for human-friendly names. 
-  * 'Cash Sales' join: AUDIT.TransactionType = TYPES.TYPE_ID WHERE TYPES.TABLE_NAME='AUDIT' AND TYPES.TYPE_NAME='TRANSACTIONTYPE' AND TYPES.TYPE_ID='66'
-  * 'Credit Sales' = TYPE_ID '70'
-  * 'Discontinued Stock' = STOCK.StockType '13'
-  * Join logic: ALWAYS use INNER JOIN dbo.TYPES to get TYPE_DESCRIPTION for status/type queries.
-
-⚠️ VISUALIZATION LOGIC:
-- 'bar': Compare performance (e.g., "Top 10 selling items").
-- 'line': Trends over time (e.g., "Daily revenue for last 30 days").
-- 'pie': Composition (e.g., "Breakdown of Cash vs Credit sales").
-- 'area': Growth volume (e.g., "Cumulative stock value history").
-- 'scatter': Correlation (e.g., "Quantity Sold vs Retail Price").
-
-⚠️ OUTPUT REQUIREMENTS:
-- SQL MUST be valid T-SQL.
-- Join AUDIT.PLUCode to STOCK.Barcode.
-- Join AUDIT.DebtorOrCreditorNumber to DEBTOR.ANUMBER.
-- Default to TOP 50.
-
-SCHEMA CONTEXT:
-${JSON.stringify(SCHEMA_MAP, null, 2)}
+Always use 'dbo.' and UPPERCASE for tables. Join AUDIT.PLUCode to STOCK.Barcode.
 `;
 
-const getBridgeUrl = () => {
-  return localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
+const getBridgeUrl = () => localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
+
+export const generateStrategicBrief = async (data: any): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `As an executive analyst, provide a 2-sentence strategic summary based on this real-time data: ${JSON.stringify(data)}. Focus on revenue health and stock risks.`,
+  });
+  return response.text || "Synchronizing live data metrics...";
+};
+
+export const getDrilldownAnalysis = async (item: any): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Provide a quick breakdown and 2 possible business reasons why this item '${item.Description}' has sold ${item.sold} units with ${item.stock} currently in stock.`,
+  });
+  return response.text || "Deep dive analysis unavailable.";
 };
 
 export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
+  // Fixed: Use 'gemini-3-pro-preview' for complex coding tasks like SQL generation.
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Business Request: ${prompt}. Generate the optimal SQL and select the best VISUALIZATION type from [bar, line, pie, area, scatter].`,
+    model: 'gemini-3-pro-preview',
+    contents: `Business Request: ${prompt}. Generate SQL and select visualization [bar, line, pie, area, scatter].`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
@@ -59,7 +52,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
   });
 
   let geminiResult = JSON.parse(response.text || '{}');
-  
   if (geminiResult.sql) {
     geminiResult.sql = geminiResult.sql
       .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
@@ -78,14 +70,15 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
     const realData = await dbResponse.json();
     return { ...geminiResult, data: realData || [] } as QueryResult;
   } catch (error: any) {
-    return { ...geminiResult, data: [], explanation: `Execution Error: ${error.message}` } as QueryResult;
+    return { ...geminiResult, data: [], explanation: `Error: ${error.message}` } as QueryResult;
   }
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight> => {
+  // Fixed: Use 'gemini-3-pro-preview' for complex analytical reasoning.
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Context: Ultisales Data Results. Question: What are the key takeaways from this data? Data: ${JSON.stringify(queryResult.data.slice(0, 15))}`,
+    model: 'gemini-3-pro-preview',
+    contents: `Analyze: ${JSON.stringify(queryResult.data.slice(0, 15))}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
