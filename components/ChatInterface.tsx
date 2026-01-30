@@ -32,16 +32,10 @@ const ChatInterface: React.FC = () => {
       const insight = await getAnalystInsight(qResult);
       setResults(prev => [...prev, { query: currentQuery, result: qResult, insight, engine: qResult.engine }]);
     } catch (err: any) {
-      console.error("Self-Sufficient Intelligence Error:", err);
-      if (err.message === "LOCAL_CONNECTION_REFUSED") {
-        setError("Local Intelligence Refused: Your browser cannot reach the Ollama server. If the server is on another computer, go to Bridge Link and change 'localhost' to the server's IP address (e.g. http://192.168.8.28:11434).");
-      } else if (err.message === "GEMINI_QUOTA_EXCEEDED_AND_OLLAMA_OFFLINE") {
-        setError("Dual Intelligence failure: Gemini quota reached and local Ollama server is offline. Please check your Ollama status.");
-      } else if (err.message === "OLLAMA_OFFLINE") {
-        setError("Local Intelligence (Ollama) unreachable. Check your settings or server status.");
-      } else {
-        setError("Intelligence Link Interrupted. Ensure your bridge is active.");
-      }
+      console.error("AI Error:", err);
+      // Capture detailed error messages from the backend or AI
+      const message = err.message || "An unknown intelligence error occurred.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +46,7 @@ const ChatInterface: React.FC = () => {
       <div className="flex items-center justify-between px-4 mb-4">
         <div>
           <h2 className="text-xl font-black text-white uppercase tracking-tighter">AI Executive Analyst</h2>
-          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Hybrid Gemini/Ollama Intelligence</p>
+          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Hybrid Intelligence Link</p>
         </div>
       </div>
 
@@ -72,11 +66,18 @@ const ChatInterface: React.FC = () => {
         )}
 
         {error && (
-          <div className="bg-rose-500/10 border border-rose-500/20 p-10 rounded-[2.5rem] max-w-2xl mx-auto text-center animate-in fade-in slide-in-from-top-4">
-             <span className="text-4xl block mb-6">⚙️</span>
-             <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Self-Sufficiency Alert</h3>
-             <p className="text-slate-400 text-sm leading-relaxed mb-6">{error}</p>
-             <button onClick={() => setError(null)} className="text-[10px] font-black uppercase tracking-widest text-emerald-500 border border-emerald-500/20 px-6 py-3 rounded-xl hover:bg-emerald-500/10 transition-all">Retry Analysis</button>
+          <div className="bg-rose-500/10 border border-rose-500/20 p-10 rounded-[2.5rem] max-w-2xl mx-auto text-left animate-in fade-in slide-in-from-top-4">
+             <div className="flex items-center gap-4 mb-6">
+               <span className="text-4xl">⚙️</span>
+               <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Execution Error</h3>
+             </div>
+             <div className="bg-black/40 p-6 rounded-2xl border border-rose-500/20 mb-6">
+                <p className="text-rose-400 text-xs font-mono break-words leading-relaxed">{error}</p>
+             </div>
+             <div className="flex gap-4">
+               <button onClick={() => setError(null)} className="text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white px-6 py-3 rounded-xl hover:bg-emerald-500 transition-all">Retry Analysis</button>
+               <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase tracking-widest border border-slate-700 text-slate-400 px-6 py-3 rounded-xl hover:bg-slate-800 transition-all">Reboot Link</button>
+             </div>
           </div>
         )}
 

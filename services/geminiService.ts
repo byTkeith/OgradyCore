@@ -1,29 +1,75 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { DEFAULT_BRIDGE_URL } from "../constants";
+import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../constants";
 import { QueryResult, AnalystInsight, AIProvider } from "../types";
 
-// Gemini SDK Setup
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+const SCHEMA_CONTEXT = Object.entries(SCHEMA_MAP).map(([table, details]) => {
+  return `Table: ${table}\nColumns: ${(details as any).fields.join(', ')}`;
+}).join('\n\n');
+
 const SYSTEM_INSTRUCTION = `
-You are 'OgradyCore AI', a specialized BI Analyst for 'Ultisales' MSSQL databases.
-THE CURRENT FISCAL YEAR IS 2026. Fallback comparison year is 2025.
-Always use 'dbo.' and UPPERCASE for tables. 
-Join AUDIT.PLUCode to STOCK.Barcode.
-Ensure all SQL queries are optimized for MSSQL and provide 100% accurate data retrieval.
-Return ONLY JSON when requested. 
-For SQL generation: Use keys 'sql', 'explanation', 'visualizationType' (bar, line, pie, area), 'xAxis', 'yAxis'.
+You are 'OgradyCore AI', a T-SQL expert for Ultisales.
+ONLY use these tables: dbo.AUDIT, dbo.STOCK, dbo.TYPES, dbo.DEBTOR.
+
+CRITICAL MAPPING RULES (DO NOT IGNORE):
+- Use 'PLUCode' NOT 'Barcode'.
+- Use 'Description' NOT 'ItemDescription'.
+- Use 'TransactionDate' NOT 'LastAuditDate'.
+- Sales Total = SUM(Qty * RetailPriceExcl).
+- Joins: dbo.AUDIT.PLUCode = dbo.STOCK.PLUCode.
+
+Return JSON: {"sql": "...", "explanation": "...", "visualizationType": "...", "xAxis": "...", "yAxis": "..."}
 `;
 
 const getSettings = () => ({
   provider: (localStorage.getItem('og_ai_provider') as AIProvider) || 'AUTO',
-  ollamaModel: localStorage.getItem('og_ollama_model') || 'llama3.1:8b',
+  ollamaModel: localStorage.getItem('og_ollama_model') || 'deepseek-r1:8b',
   bridgeUrl: localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL
 });
 
+/**
+ * AGGRESSIVE SQL REPAIR ENGINE v2.9
+ * Specifically handles DeepSeek reasoning outputs and forces column mapping.
+ */
+function repairSql(sql: string): string {
+  if (!sql) return "";
+  
+  let repaired = sql;
+  
+  // 1. Force Barcode -> PLUCode
+  repaired = repaired.replace(/([a-zA-Z0-9_]+\.)?Barcode/gi, (match) => {
+    return match.includes('.') ? match.split('.')[0] + '.PLUCode' : 'PLUCode';
+  });
+
+  // 2. Force ItemDescription -> Description
+  repaired = repaired.replace(/ItemDescription/gi, 'Description');
+
+  // 3. Force LastAuditDate -> TransactionDate
+  repaired = repaired.replace(/LastAuditDate/gi, 'TransactionDate');
+
+  // 4. Case correction for dbo prefix
+  repaired = repaired.replace(/dbo\.(\w+)/gi, (m) => m.toLowerCase());
+  repaired = repaired.replace(/dbo\./g, 'dbo.');
+  
+  // 5. Ensure final SQL has proper casing for system commands
+  const commands = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'JOIN', 'LEFT JOIN', 'SUM', 'AVG', 'COUNT', 'TOP'];
+  commands.forEach(cmd => {
+    const reg = new RegExp(`\\b${cmd}\\b`, 'gi');
+    repaired = repaired.replace(reg, cmd);
+  });
+
+  return repaired;
+}
+
 function cleanAiResponse(raw: string): string {
+  // DeepSeek-R1 specifically uses <think> tags for chain-of-thought
   let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  
+  // Also remove markdown blocks if present
+  cleaned = cleaned.replace(/```json/gi, '').replace(/```/gi, '').trim();
+
   if (cleaned.includes('{') && cleaned.includes('}')) {
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
@@ -35,107 +81,62 @@ function cleanAiResponse(raw: string): string {
 async function callOllama(prompt: string, json: boolean = false) {
   const { bridgeUrl, ollamaModel } = getSettings();
   const baseUrl = bridgeUrl.replace(/\/$/, "");
-  
   try {
     const response = await fetch(`${baseUrl}/ollama-proxy`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': '69420'
-      },
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
       body: JSON.stringify({
         model: ollamaModel,
-        prompt: `${SYSTEM_INSTRUCTION}\n\nTask: ${prompt}`,
+        prompt: `${SYSTEM_INSTRUCTION}\n\nTask: ${prompt}\n\nJSON Output:`,
         stream: false,
         format: json ? 'json' : undefined
       }),
     });
     
-    if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "BRIDGE_OLLAMA_ERROR");
+    const data = await response.json();
+    
+    if (response.status === 503 || response.status === 500) {
+      const errorDetail = data.detail || "Ollama error";
+      throw new Error(`OLLAMA_ERROR: ${errorDetail}`);
     }
     
-    const data = await response.json();
-    return cleanAiResponse(data.response);
+    return cleanAiResponse(data.response || "");
   } catch (e: any) {
-    console.error("Bridge AI unreachable:", e.message);
-    throw new Error(e.message || "OLLAMA_PROXY_OFFLINE");
+    if (e.message.includes('OLLAMA_ERROR')) throw e;
+    throw new Error("BRIDGE_OFFLINE: Ensure main.py is running.");
   }
 }
 
 async function smartExecute(task: string, model: 'flash' | 'pro', json: boolean = false) {
   const settings = getSettings();
-  const modelName = model === 'flash' ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview';
-
-  if (settings.provider === 'OLLAMA') {
-    return { response: await callOllama(task, json), engine: 'OLLAMA' };
-  }
+  if (settings.provider === 'OLLAMA') return { response: await callOllama(task, json), engine: 'OLLAMA' };
 
   try {
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: model === 'flash' ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview',
       contents: task,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: json ? "application/json" : undefined
-      }
+      config: { systemInstruction: SYSTEM_INSTRUCTION, responseMimeType: json ? "application/json" : undefined }
     });
     return { response: response.text, engine: 'GEMINI' };
   } catch (error: any) {
-    const isQuotaError = error?.message?.includes("429") || error?.status === 429;
-    
-    if (settings.provider === 'AUTO' || isQuotaError) {
-      console.warn("Gemini limit reached or auto-fallback active. Routing through Server Bridge to Ollama...");
-      try {
-        const localRes = await callOllama(task, json);
-        return { response: localRes, engine: 'OLLAMA' };
-      } catch (ollamaErr: any) {
-        throw new Error(isQuotaError ? "GEMINI_QUOTA_EXCEEDED_AND_OLLAMA_OFFLINE" : "AI_NETWORK_FAILURE");
-      }
+    if (settings.provider === 'AUTO' || error?.status === 429) {
+      const localRes = await callOllama(task, json);
+      return { response: localRes, engine: 'OLLAMA' };
     }
     throw error;
   }
 }
 
-export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
-  const prompt = `Summarize BI data for ${data.activeYear}: ${JSON.stringify(data.kpis)}. 2 sentences max.`;
-  try {
-    const { response, engine } = await smartExecute(prompt, 'flash');
-    return { text: response || "", engine };
-  } catch (error) {
-    return null;
-  }
-};
-
-export const getDrilldownAnalysis = async (item: any): Promise<{text: string, engine: string}> => {
-  const prompt = `SKU: ${item.Description}. Sold: ${item.sold}, Stock: ${item.stock}. Performance diagnostic?`;
-  try {
-    const { response, engine } = await smartExecute(prompt, 'pro');
-    return { text: response || "", engine };
-  } catch (error) {
-    return { text: "Manual stock review suggested.", engine: "LOCAL_SQL" };
-  }
-};
-
 export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string }> => {
-  const settings = getSettings();
-  const task = `Request: ${prompt}. Current Year: 2026. Generate JSON for Ultisales.`;
-  const { response, engine } = await smartExecute(task, 'pro', true);
-  
+  const { response, engine } = await smartExecute(prompt, 'pro', true);
   try {
     let result = JSON.parse(response || '{}');
     if (result.sql) {
-      // Common AI hallucination fixes for Ultisales schema
-      result.sql = result.sql
-        .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
-        .replace(/tbl/gi, 'dbo.')
-        .replace(/dbo\.(\w+)/g, (match: string) => match.toUpperCase())
-        .replace(/DBO\./g, 'dbo.');
+      result.sql = repairSql(result.sql);
     }
 
-    const baseUrl = settings.bridgeUrl.replace(/\/$/, "");
-    const dbResponse = await fetch(`${baseUrl}/query`, {
+    const settings = getSettings();
+    const dbResponse = await fetch(`${settings.bridgeUrl.replace(/\/$/, "")}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
       body: JSON.stringify({ sql: result.sql })
@@ -143,33 +144,36 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
 
     if (!dbResponse.ok) {
       const err = await dbResponse.json();
-      throw new Error(err.detail || "Database request failed");
+      throw new Error(err.detail || "Database Error");
     }
 
-    const realData = await dbResponse.json();
-    
-    // Ensure data is always an array
-    const finalizedData = Array.isArray(realData) ? realData : [];
-    
-    return { ...result, data: finalizedData, engine };
-  } catch (e: any) {
-    console.error("Analysis Error:", e);
-    throw e;
-  }
+    return { ...result, data: await dbResponse.json(), engine };
+  } catch (e: any) { throw e; }
+};
+
+export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
+  const prompt = `Summarize BI metrics for ${data.activeYear}: ${JSON.stringify(data.kpis)}. 2 sentences max.`;
+  try {
+    const { response, engine } = await smartExecute(prompt, 'flash');
+    return { text: response || "", engine };
+  } catch { return null; }
+};
+
+export const getDrilldownAnalysis = async (item: any): Promise<{text: string, engine: string}> => {
+  const prompt = `Analyze product: ${item.Description}. Sold: ${item.sold}, Stock: ${item.stock}. Performance?`;
+  try {
+    const { response, engine } = await smartExecute(prompt, 'pro');
+    return { text: response || "", engine };
+  } catch { return { text: "Manual review suggested.", engine: "LOCAL" }; }
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
-  // Safety check: ensure data exists and is an array before trying to slice
   const safeData = Array.isArray(queryResult.data) ? queryResult.data : [];
-  const task = `Analyze this dataset: ${JSON.stringify(safeData.slice(0, 15))}. Provide JSON insights.`;
-  
-  const { response, engine } = await smartExecute(task, 'pro', true);
+  const prompt = `Analyze this dataset: ${JSON.stringify(safeData.slice(0, 15))}. Provide JSON insights.`;
+  const { response, engine } = await smartExecute(prompt, 'pro', true);
   try {
     return { ...JSON.parse(response || '{}'), engine };
-  } catch (e) {
-    return {
-      summary: "Data retrieved, but AI narration failed.",
-      trends: [], anomalies: [], suggestions: [], engine
-    };
+  } catch {
+    return { summary: "Data retrieved. AI narrative engine busy.", trends: [], anomalies: [], suggestions: [], engine };
   }
 };
