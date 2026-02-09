@@ -19,7 +19,13 @@ export interface AnalystInsight {
   suggestions: string[];
 }
 
-export type AIProvider = 'GEMINI' | 'OLLAMA' | 'AUTO';
+export interface DashboardMetric {
+  label: string;
+  value: string | number;
+  change: number;
+  trend: 'up' | 'down' | 'neutral';
+  icon: string;
+}
 
 export enum AppSection {
   DASHBOARD = 'DASHBOARD',
