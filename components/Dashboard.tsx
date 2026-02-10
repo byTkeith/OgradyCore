@@ -26,7 +26,7 @@ interface DetailedStats {
 const Dashboard: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [aiBrief, setAiBrief] = useState("Analyzing production fiscal streams...");
+  const [aiBrief, setAiBrief] = useState("Synchronizing production data streams...");
   const lastFetchRef = useRef<number>(0);
 
   const fetchBIData = useCallback(async () => {
@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
       if (isNaN(refDate.getTime())) refDate = new Date();
       const refDateIso = refDate.toISOString().split('T')[0];
 
-      // v4.6 Optimized Trailing Revenue SQL
+      // trailing 30 day revenue sql
       const yoySql = `
         SELECT DAY(TransactionDate) as day, 
         SUM(CASE WHEN TransactionDate >= DATEADD(day, -30, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
@@ -96,7 +96,6 @@ const Dashboard: React.FC = () => {
         runQuery(yoySql), runQuery(topProdSql), runQuery(compSql), runQuery(kpiSql)
       ]);
 
-      // Map raw composition types to business descriptions from metadata
       const composition = compRaw.map((item: any) => ({
         label: (DOMAIN_MAPPINGS.AUDIT.TRANSACTIONTYPE as any)[item.TransactionType.toString()] || `Type ${item.TransactionType}`,
         value: item.value
@@ -111,7 +110,7 @@ const Dashboard: React.FC = () => {
         topProducts: Array.isArray(prod) ? prod : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_CORE_v4.6',
+        engine: 'SQL_MASTER_v4.7',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -134,12 +133,12 @@ const Dashboard: React.FC = () => {
 
   if (!stats) return (
     <div className="flex flex-col items-center justify-center h-full space-y-8 animate-pulse">
-      <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+      <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.6 Unified Logic Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.7 Hyper-Scale Engine</p>
       </div>
     </div>
   );
@@ -149,86 +148,99 @@ const Dashboard: React.FC = () => {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800 pb-10">
         <div>
           <div className="flex items-center gap-4 mb-2">
-             <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">PROD LIVE</span>
+             <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">VERIFIED v4.7</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
-            Last Transaction: <span className="text-emerald-400">{stats.activeDate}</span>
+            Last Transaction Detected: <span className="text-emerald-400">{stats.activeDate}</span>
           </p>
         </div>
-        <button onClick={fetchBIData} className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
-           {isRefreshing ? "Synchronizing..." : "Sync Master Data"} 🔄
+        <button onClick={fetchBIData} className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 group">
+           {isRefreshing ? "Syncing..." : "Refresh Master Data"} <span className="group-hover:rotate-180 transition-transform duration-500">🔄</span>
         </button>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
         {[
-          { label: "Trailing 30D Rev", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'from-emerald-600/20 to-transparent', text: 'text-emerald-400' },
-          { label: "Momentum Index", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: 'from-blue-600/20 to-transparent', text: 'text-blue-400' },
-          { label: "Inventory Alarms", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'from-rose-600/20 to-transparent', text: 'text-rose-400' },
-          { label: "Avg Transaction", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'from-amber-600/20 to-transparent', text: 'text-amber-400' }
+          { label: "Trailing 30D Revenue", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'from-emerald-600/30 to-slate-900', text: 'text-emerald-400' },
+          { label: "Growth Velocity", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: 'from-blue-600/30 to-slate-900', text: 'text-blue-400' },
+          { label: "Inventory Alarms", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'from-rose-600/30 to-slate-900', text: 'text-rose-400' },
+          { label: "Avg Ticket Value", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'from-amber-600/30 to-slate-900', text: 'text-amber-400' }
         ].map((kpi, i) => (
-          <div key={i} className={`bg-slate-900/40 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-emerald-500/40 transition-all`}>
+          <div key={i} className={`bg-slate-900/60 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-emerald-500/50 transition-all backdrop-blur-md`}>
             <div className={`absolute inset-0 bg-gradient-to-br ${kpi.color} opacity-20`}></div>
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 relative z-10">{kpi.label}</span>
             <div className="flex items-center justify-between relative z-10">
-              <h3 className={`text-2xl md:text-3xl font-black ${kpi.text}`}>{kpi.val}</h3>
-              <span className="text-3xl opacity-30 group-hover:opacity-100 transition-opacity">{kpi.icon}</span>
+              <h3 className={`text-2xl md:text-4xl font-black ${kpi.text}`}>{kpi.val}</h3>
+              <span className="text-4xl opacity-30 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-300">{kpi.icon}</span>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-[12rem] font-black">AI</div>
+      <div className="bg-slate-900 border border-slate-800 rounded-[3.5rem] p-12 shadow-[0_0_80px_rgba(0,0,0,0.5)] relative overflow-hidden border-l-[12px] border-l-emerald-600">
+        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-[15rem] font-black">AI</div>
         <div className="flex-1 space-y-6 relative z-10">
-          <h2 className="text-xs font-black text-emerald-500 uppercase tracking-[0.4em]">Strategic Analysis Engine</h2>
-          <p className="text-slate-100 text-xl md:text-3xl font-semibold italic leading-snug max-w-4xl tracking-tight">"{aiBrief}"</p>
+          <h2 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.6em]">Analyst Intelligence Brief</h2>
+          <p className="text-slate-100 text-xl md:text-4xl font-bold italic leading-tight max-w-5xl tracking-tight drop-shadow-lg">"{aiBrief}"</p>
+          <div className="flex gap-4 pt-4">
+             <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-slate-400 uppercase">Context: v4.7 Production</span>
+             <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-emerald-400 uppercase">Model: Gemini 3 Flash</span>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl backdrop-blur-xl">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-10 border-l-4 border-emerald-500 pl-6">Revenue Trajectory</h2>
-          <div className="h-[400px]">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl">
+          <div className="flex items-center justify-between mb-12">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter border-l-6 border-emerald-500 pl-8">Fiscal Trajectory</h2>
+            <div className="flex gap-3">
+               <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active</div>
+               <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase"><span className="w-2 h-2 rounded-full bg-slate-700"></span> Prev Year</div>
+            </div>
+          </div>
+          <div className="h-[450px]">
             {stats.salesYoY.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.salesYoY}>
                   <defs>
-                    <linearGradient id="gCurr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="gCurr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.7}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="day" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickMargin={10} />
-                  <YAxis stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R${v}`} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '24px', padding: '15px' }} />
-                  <Area name="Active Revenue" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={5} />
-                  <Area name="Benchmark Prev" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={2} strokeDasharray="10 10" />
+                  <XAxis dataKey="day" stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickMargin={15} />
+                  <YAxis stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v) => `R${v}`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px', padding: '20px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+                    itemStyle={{ color: '#10b981', fontWeight: 800 }}
+                  />
+                  <Area name="Current Month" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={6} />
+                  <Area name="Previous Year" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={3} strokeDasharray="12 12" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-[2.5rem]">
-                <p className="text-slate-600 text-xs font-black uppercase tracking-widest italic opacity-50 text-center px-10">Synchronizing with Transaction Stream...</p>
+              <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
+                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic text-center px-12">No transaction signals in range.</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl backdrop-blur-xl">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-10 border-l-4 border-blue-500 pl-6">Business Composition</h2>
-          <div className="w-full h-[400px]">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl">
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-blue-500 pl-8">Transaction Mix (By Mapping)</h2>
+          <div className="w-full h-[450px]">
             {stats.composition.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={100} outerRadius={140} paddingAngle={10} cornerRadius={8}>
+                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={120} outerRadius={170} paddingAngle={12} cornerRadius={12}>
                     {stats.composition.map((_, index) => (<Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} strokeWidth={0} />))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '24px' }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', paddingTop: '30px' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', color: '#94a3b8', paddingTop: '40px' }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-[2.5rem]">
-                <p className="text-slate-600 text-xs font-black uppercase tracking-widest opacity-50">Composition Link Pending</p>
+              <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
+                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic opacity-50">Composition Link Pending</p>
               </div>
             )}
           </div>
