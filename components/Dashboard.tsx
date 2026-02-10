@@ -12,8 +12,7 @@ interface DetailedStats {
   salesYoY: any[];
   topProducts: any[];
   composition: any[];
-  activeYear: number;
-  activeMonth: number;
+  activeDate: string;
   engine: string;
   kpis: {
     totalRevenue: number;
@@ -27,7 +26,7 @@ interface DetailedStats {
 const Dashboard: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [aiBrief, setAiBrief] = useState("Synchronizing Executive Intelligence...");
+  const [aiBrief, setAiBrief] = useState("Analyzing production fiscal streams...");
   const lastFetchRef = useRef<number>(0);
 
   const fetchBIData = useCallback(async () => {
@@ -43,12 +42,12 @@ const Dashboard: React.FC = () => {
         const res = await fetch(`${baseUrl}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
-          body: JSON.stringify({ sql }),
+          body: JSON.stringify({ sql: `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${sql}` }),
           signal: AbortSignal.timeout(20000),
         });
         if (!res.ok) return [];
         return await res.json();
-      } catch (e) { return []; }
+      } catch { return []; }
     };
 
     try {
@@ -57,58 +56,51 @@ const Dashboard: React.FC = () => {
       
       let refDate = lastDateStr ? new Date(lastDateStr) : new Date();
       if (isNaN(refDate.getTime())) refDate = new Date();
+      const refDateIso = refDate.toISOString().split('T')[0];
 
-      const opYear = refDate.getFullYear();
-      const opMonth = refDate.getMonth() + 1;
-      const prevYear = opYear - 1;
-
-      // v4.3: Refined Revenue Query using standard sale types (66=Cash, 70=Credit, 80=Layby)
+      // v4.6 Optimized Trailing Revenue SQL
       const yoySql = `
         SELECT DAY(TransactionDate) as day, 
-        SUM(CASE WHEN YEAR(TransactionDate) = ${opYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
-        SUM(CASE WHEN YEAR(TransactionDate) = ${prevYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
+        SUM(CASE WHEN TransactionDate >= DATEADD(day, -30, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
+        SUM(CASE WHEN TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
         FROM dbo.AUDIT 
-        WHERE MONTH(TransactionDate) = ${opMonth} 
+        WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}'))
         AND TransactionType IN (66, 67, 68, 70, 80)
-        AND YEAR(TransactionDate) IN (${prevYear}, ${opYear}) 
         GROUP BY DAY(TransactionDate)`;
 
       const topProdSql = `
-        SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock, AVG(A.RetailPriceExcl) as avgPrice 
+        SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock 
         FROM dbo.AUDIT A 
         JOIN dbo.STOCK S ON A.PLUCode = S.Barcode 
-        WHERE A.TransactionDate >= DATEADD(day, -60, '${refDate.toISOString().split('T')[0]}') 
+        WHERE A.TransactionDate >= DATEADD(day, -60, '${refDateIso}') 
         AND A.TransactionType IN (66, 70, 80)
         GROUP BY S.Description 
         ORDER BY sold DESC`;
 
-      // v4.3: Composition based on documented TransactionType descriptions
       const compSql = `
-        SELECT TOP 5 
-        CASE 
-          WHEN TransactionType = 66 THEN 'Cash Sales'
-          WHEN TransactionType = 70 THEN 'Credit Sales'
-          WHEN TransactionType = 80 THEN 'Lay-Bys'
-          WHEN TransactionType = 84 THEN 'Recipe Sales'
-          ELSE 'Other Operations'
-        END as label, 
-        COUNT(*) as value 
+        SELECT TOP 5 TransactionType, COUNT(*) as value 
         FROM dbo.AUDIT 
-        WHERE TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}') 
-        AND TransactionType IN (66, 70, 80, 84)
+        WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
+        AND TransactionType IN (66, 67, 68, 70, 80, 84)
         GROUP BY TransactionType`;
 
       const kpiSql = `
         SELECT 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${opYear} AND MONTH(TransactionDate) = ${opMonth} AND TransactionType IN (66, 70, 80)) as mRev, 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${prevYear} AND MONTH(TransactionDate) = ${opMonth} AND TransactionType IN (66, 70, 80)) as pRev, 
-        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}')) as activeCust, 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as mRev, 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as pRev, 
+        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
-        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}') AND TransactionType IN (66, 70, 80)) as ticket`;
+        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as ticket`;
 
-      const [yoy, prod, comp, kpi] = await Promise.all([
+      const [yoy, prod, compRaw, kpi] = await Promise.all([
         runQuery(yoySql), runQuery(topProdSql), runQuery(compSql), runQuery(kpiSql)
       ]);
+
+      // Map raw composition types to business descriptions from metadata
+      const composition = compRaw.map((item: any) => ({
+        label: (DOMAIN_MAPPINGS.AUDIT.TRANSACTIONTYPE as any)[item.TransactionType.toString()] || `Type ${item.TransactionType}`,
+        value: item.value
+      }));
 
       const mRev = kpi[0]?.mRev || 0;
       const pRev = kpi[0]?.pRev || 1;
@@ -117,10 +109,9 @@ const Dashboard: React.FC = () => {
       const newStats: DetailedStats = {
         salesYoY: Array.isArray(yoy) ? yoy.sort((a,b) => a.day - b.day) : [],
         topProducts: Array.isArray(prod) ? prod : [],
-        composition: Array.isArray(comp) ? comp : [],
-        activeYear: opYear,
-        activeMonth: opMonth,
-        engine: 'SQL_MASTER',
+        composition,
+        activeDate: refDateIso,
+        engine: 'SQL_CORE_v4.6',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -131,14 +122,8 @@ const Dashboard: React.FC = () => {
       };
 
       setStats(newStats);
-      
-      try {
-        const brief = await generateStrategicBrief(newStats);
-        if (brief) setAiBrief(brief.text);
-        else setAiBrief(`Production verified. Revenue recorded at R${mRev.toLocaleString()} for the current detection cycle.`);
-      } catch {
-        setAiBrief(`Operational update: R${mRev.toLocaleString()} revenue recognized. System sync complete.`);
-      }
+      const brief = await generateStrategicBrief(newStats);
+      if (brief) setAiBrief(brief.text);
 
     } finally {
       setIsRefreshing(false);
@@ -148,103 +133,102 @@ const Dashboard: React.FC = () => {
   useEffect(() => { fetchBIData(); }, [fetchBIData]);
 
   if (!stats) return (
-    <div className="flex flex-col items-center justify-center h-full space-y-6">
-      <div className="w-16 h-16 border-4 border-slate-800 border-t-emerald-500 rounded-full animate-spin"></div>
+    <div className="flex flex-col items-center justify-center h-full space-y-8 animate-pulse">
+      <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div className="text-center">
-        <p className="text-xs font-black text-white uppercase tracking-widest">Bridging SQL Production</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.3 Logic Active</p>
+        <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.6 Unified Logic Engine</p>
       </div>
     </div>
   );
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
   return (
-    <div className="p-4 md:p-10 max-w-[1600px] mx-auto space-y-8 overflow-y-auto h-full pb-32 custom-scrollbar">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="p-4 md:p-10 max-w-[1600px] mx-auto space-y-10 overflow-y-auto h-full pb-32 custom-scrollbar">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800 pb-10">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-             <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">Executive <span className="text-emerald-500">Suite</span></h1>
-             <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-[9px] font-black text-emerald-500 uppercase tracking-widest">
-                KNOWLEDGE BASE v4.3
-             </div>
+          <div className="flex items-center gap-4 mb-2">
+             <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">Suite</span></h1>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">PROD LIVE</span>
           </div>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">
-            Period: <span className="text-emerald-400">{monthNames[stats.activeMonth - 1]} {stats.activeYear}</span> (Latest Data)
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
+            Last Transaction: <span className="text-emerald-400">{stats.activeDate}</span>
           </p>
         </div>
-        <button onClick={fetchBIData} className="flex items-center gap-2 px-6 py-3 bg-slate-900 border border-slate-800 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all text-emerald-500 shadow-lg">
-           {isRefreshing ? "Syncing..." : "Sync Dashboard"} 🔄
+        <button onClick={fetchBIData} className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
+           {isRefreshing ? "Synchronizing..." : "Sync Master Data"} 🔄
         </button>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
         {[
-          { label: "Net Revenue", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'text-emerald-400' },
-          { label: "Growth Index", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: stats.kpis.growthRate >= 0 ? 'text-blue-400' : 'text-rose-400' },
-          { label: "Inventory Alerts", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'text-rose-400' },
-          { label: "Avg Ticket", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'text-amber-400' }
+          { label: "Trailing 30D Rev", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'from-emerald-600/20 to-transparent', text: 'text-emerald-400' },
+          { label: "Momentum Index", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: 'from-blue-600/20 to-transparent', text: 'text-blue-400' },
+          { label: "Inventory Alarms", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'from-rose-600/20 to-transparent', text: 'text-rose-400' },
+          { label: "Avg Transaction", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'from-amber-600/20 to-transparent', text: 'text-amber-400' }
         ].map((kpi, i) => (
-          <div key={i} className="bg-slate-900 border border-slate-800/80 p-6 rounded-[2rem] shadow-xl group hover:border-emerald-500/40 transition-all">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">{kpi.label}</span>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-2xl md:text-3xl font-black ${kpi.color}`}>{kpi.val}</h3>
-              <span className="text-xl opacity-20 group-hover:opacity-100 transition-all">{kpi.icon}</span>
+          <div key={i} className={`bg-slate-900/40 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-emerald-500/40 transition-all`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${kpi.color} opacity-20`}></div>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 relative z-10">{kpi.label}</span>
+            <div className="flex items-center justify-between relative z-10">
+              <h3 className={`text-2xl md:text-3xl font-black ${kpi.text}`}>{kpi.val}</h3>
+              <span className="text-3xl opacity-30 group-hover:opacity-100 transition-opacity">{kpi.icon}</span>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl relative border-l-8 border-l-emerald-600">
-        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none text-9xl">🧠</div>
-        <div className="flex-1 space-y-4">
-          <h2 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Strategic BI Summary</h2>
-          <p className="text-slate-200 text-lg md:text-2xl font-medium italic leading-relaxed py-2">"{aiBrief}"</p>
+      <div className="bg-slate-900 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-[12rem] font-black">AI</div>
+        <div className="flex-1 space-y-6 relative z-10">
+          <h2 className="text-xs font-black text-emerald-500 uppercase tracking-[0.4em]">Strategic Analysis Engine</h2>
+          <p className="text-slate-100 text-xl md:text-3xl font-semibold italic leading-snug max-w-4xl tracking-tight">"{aiBrief}"</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Revenue Momentum</h2>
-          <div className="h-[350px]">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl backdrop-blur-xl">
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-10 border-l-4 border-emerald-500 pl-6">Revenue Trajectory</h2>
+          <div className="h-[400px]">
             {stats.salesYoY.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.salesYoY}>
                   <defs>
-                    <linearGradient id="curr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="gCurr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="day" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
-                  <Area name="Sales" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#curr)" strokeWidth={4} />
-                  <Area name="Last Year" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                  <XAxis dataKey="day" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickMargin={10} />
+                  <YAxis stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R${v}`} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '24px', padding: '15px' }} />
+                  <Area name="Active Revenue" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={5} />
+                  <Area name="Benchmark Prev" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={2} strokeDasharray="10 10" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-3xl">
-                <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest italic">No sales data found for the active period.</p>
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-[2.5rem]">
+                <p className="text-slate-600 text-xs font-black uppercase tracking-widest italic opacity-50 text-center px-10">Synchronizing with Transaction Stream...</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Business Mix</h2>
-          <div className="w-full h-[350px]">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-[3.5rem] p-12 shadow-2xl backdrop-blur-xl">
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-10 border-l-4 border-blue-500 pl-6">Business Composition</h2>
+          <div className="w-full h-[400px]">
             {stats.composition.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={8}>
+                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={100} outerRadius={140} paddingAngle={10} cornerRadius={8}>
                     {stats.composition.map((_, index) => (<Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} strokeWidth={0} />))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '24px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', paddingTop: '30px' }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-3xl">
-                <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Sales distribution data missing.</p>
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-[2.5rem]">
+                <p className="text-slate-600 text-xs font-black uppercase tracking-widest opacity-50">Composition Link Pending</p>
               </div>
             )}
           </div>
