@@ -25,7 +25,6 @@ const App: React.FC = () => {
     setLastError(null);
     
     try {
-      // Step 1: Check if Bridge (Python) is even reachable
       const pingRes = await fetch(`${targetUrl}/ping`, { 
         headers: { 'ngrok-skip-browser-warning': '69420' }
       }).catch(() => null);
@@ -36,7 +35,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // Step 2: Bridge is alive, now check Database
       const healthRes = await fetch(`${targetUrl}/health`, { 
           headers: { 'ngrok-skip-browser-warning': '69420' } 
       });
@@ -46,12 +44,14 @@ const App: React.FC = () => {
         setConnStatus('online');
         localStorage.setItem('og_bridge_url', targetUrl);
         
-        // Step 3: Fetch Schema
+        // v3.6: We treat schema discovery as a non-fatal step
         const schemaResult = await initSchema(targetUrl);
-        if (schemaResult.success) {
-          setDetectedSchema(schemaResult.data);
-        } else {
-          setLastError(`Database connected, but schema discovery failed: ${schemaResult.error}`);
+        setDetectedSchema(schemaResult.data);
+        
+        if (schemaResult.error) {
+          console.warn("Schema Alert:", schemaResult.error);
+          // Show as warning, but don't stop the app
+          setLastError(schemaResult.error);
         }
       } else {
         setConnStatus('db_error');
@@ -80,7 +80,7 @@ const App: React.FC = () => {
           <div className="p-8 md:p-16 max-w-6xl mx-auto space-y-12 overflow-y-auto h-full pb-32 custom-scrollbar">
             <div className="text-center">
               <h2 className="text-4xl font-black text-white uppercase tracking-tighter">System Diagnostic</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Bridge Protocol v3.4</p>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Bridge Protocol v3.6</p>
             </div>
 
             <div className="grid md:grid-cols-1 gap-8 max-w-2xl mx-auto">
@@ -117,18 +117,24 @@ const App: React.FC = () => {
 
               {lastError && (
                 <div className={`border p-6 rounded-2xl animate-in fade-in slide-in-from-top-2 ${
-                  connStatus === 'db_error' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-rose-500/10 border-rose-500/20'
+                  connStatus === 'db_error' ? 'bg-amber-500/10 border-amber-500/20' : 
+                  connStatus === 'online' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'
                 }`}>
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-xl">{connStatus === 'db_error' ? '⚡' : '⚠️'}</span>
+                    <span className="text-xl">
+                      {connStatus === 'db_error' ? '⚡' : connStatus === 'online' ? 'ℹ️' : '⚠️'}
+                    </span>
                     <h4 className={`text-[10px] font-black uppercase tracking-widest ${
-                      connStatus === 'db_error' ? 'text-amber-500' : 'text-rose-500'
+                      connStatus === 'db_error' ? 'text-amber-500' : 
+                      connStatus === 'online' ? 'text-emerald-500' : 'text-rose-500'
                     }`}>
-                      {connStatus === 'db_error' ? 'Database Connection Refused' : 'Bridge Communication Error'}
+                      {connStatus === 'db_error' ? 'Database Connection Refused' : 
+                       connStatus === 'online' ? 'System Information' : 'Bridge Communication Error'}
                     </h4>
                   </div>
                   <p className={`text-xs font-mono leading-relaxed ${
-                    connStatus === 'db_error' ? 'text-amber-400/80' : 'text-rose-400/80'
+                    connStatus === 'db_error' ? 'text-amber-400/80' : 
+                    connStatus === 'online' ? 'text-emerald-400/80' : 'text-rose-400/80'
                   }`}>{lastError}</p>
                 </div>
               )}
@@ -138,7 +144,7 @@ const App: React.FC = () => {
               <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-6">
                  <div className="flex items-center justify-between">
                    <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-                     <span className="text-2xl">📊</span> Live Schema Tables
+                     <span className="text-2xl">📊</span> Active Schema Map
                    </h3>
                  </div>
                  <div className="grid md:grid-cols-2 gap-4">
@@ -179,12 +185,12 @@ const App: React.FC = () => {
                 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
               }`}></span>
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">
-                {connStatus === 'online' ? 'GEMINI LINK STABLE' : 
-                 connStatus === 'db_error' ? 'BRIDGE UP / DB DOWN' : 'LINK DISCONNECTED'}
+                {connStatus === 'online' ? 'OGRADYCORE LINK STABLE' : 
+                 connStatus === 'db_error' ? 'BRIDGE UP / DB BUSY' : 'LINK DISCONNECTED'}
               </span>
             </div>
           </div>
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v3.4</span>
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v3.6</span>
         </header>
         <div className="flex-1 overflow-hidden relative">{renderContent()}</div>
       </main>
