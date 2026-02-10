@@ -5,15 +5,14 @@ import {
   Cell, Legend, PieChart, Pie
 } from 'recharts';
 import { DEFAULT_BRIDGE_URL, MOCK_CHART_COLORS } from '../constants';
-import { generateStrategicBrief, getDrilldownAnalysis } from '../services/geminiService';
+import { generateStrategicBrief } from '../services/geminiService';
 
 interface DetailedStats {
   salesYoY: any[];
   topProducts: any[];
   composition: any[];
-  cumulativeRevenue: any[];
   activeYear: number;
-  isFallback: boolean;
+  activeMonth: number;
   engine: string;
   kpis: {
     totalRevenue: number;
@@ -44,8 +43,7 @@ const Dashboard: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
           body: JSON.stringify({ sql }),
-          signal: AbortSignal.timeout(12000),
-          mode: 'cors'
+          signal: AbortSignal.timeout(15000),
         });
         if (!res.ok) return [];
         return await res.json();
@@ -53,17 +51,24 @@ const Dashboard: React.FC = () => {
     };
 
     try {
-      const check2026 = await runQuery(`SELECT COUNT(*) as cnt FROM dbo.AUDIT WHERE TransactionDate >= '2026-01-01'`);
-      const opYear = (check2026?.[0]?.cnt > 5) ? 2026 : 2025;
+      // v4.2: Dynamic Date Detection - Find the latest data point in the system
+      const latestDateRes = await runQuery(`SELECT MAX(TransactionDate) as lastDate FROM dbo.AUDIT`);
+      const lastDateStr = latestDateRes?.[0]?.lastDate;
+      
+      let refDate = lastDateStr ? new Date(lastDateStr) : new Date();
+      if (isNaN(refDate.getTime())) refDate = new Date();
+
+      const opYear = refDate.getFullYear();
+      const opMonth = refDate.getMonth() + 1;
       const prevYear = opYear - 1;
 
-      // v3.8: Join AUDIT.PLUCode = STOCK.Barcode based on provided schema
+      // Primary Sales Query
       const yoySql = `
         SELECT DAY(TransactionDate) as day, 
         SUM(CASE WHEN YEAR(TransactionDate) = ${opYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
         SUM(CASE WHEN YEAR(TransactionDate) = ${prevYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
         FROM dbo.AUDIT 
-        WHERE MONTH(TransactionDate) = MONTH(GETDATE()) 
+        WHERE MONTH(TransactionDate) = ${opMonth} 
         AND YEAR(TransactionDate) IN (${prevYear}, ${opYear}) 
         GROUP BY DAY(TransactionDate)`;
 
@@ -71,24 +76,24 @@ const Dashboard: React.FC = () => {
         SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock, AVG(A.RetailPriceExcl) as avgPrice 
         FROM dbo.AUDIT A 
         JOIN dbo.STOCK S ON A.PLUCode = S.Barcode 
-        WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) 
+        WHERE A.TransactionDate >= DATEADD(day, -60, '${refDate.toISOString().split('T')[0]}') 
         GROUP BY S.Description 
         ORDER BY sold DESC`;
 
       const compSql = `
-        SELECT ISNULL(T.TYPE_DESCRIPTION, 'Operational Misc') as label, COUNT(*) as value 
+        SELECT TOP 5 ISNULL(T.TYPE_DESCRIPTION, 'Operational') as label, COUNT(*) as value 
         FROM dbo.AUDIT A 
         LEFT JOIN dbo.TYPES T ON A.TransactionType = CAST(T.TYPE_ID AS INT) AND T.TABLE_NAME = 'AUDIT' AND T.TYPE_NAME = 'TRANSACTIONTYPE' 
-        WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) 
+        WHERE A.TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}') 
         GROUP BY T.TYPE_DESCRIPTION`;
 
       const kpiSql = `
         SELECT 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${opYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as mRev, 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${prevYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as pRev, 
-        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as activeCust, 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${opYear} AND MONTH(TransactionDate) = ${opMonth}) as mRev, 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${prevYear} AND MONTH(TransactionDate) = ${opMonth}) as pRev, 
+        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
-        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as ticket`;
+        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDate.toISOString().split('T')[0]}')) as ticket`;
 
       const [yoy, prod, comp, kpi] = await Promise.all([
         runQuery(yoySql), runQuery(topProdSql), runQuery(compSql), runQuery(kpiSql)
@@ -100,12 +105,11 @@ const Dashboard: React.FC = () => {
 
       const newStats: DetailedStats = {
         salesYoY: Array.isArray(yoy) ? yoy.sort((a,b) => a.day - b.day) : [],
-        cumulativeRevenue: [],
         topProducts: Array.isArray(prod) ? prod : [],
         composition: Array.isArray(comp) ? comp : [],
         activeYear: opYear,
-        isFallback: opYear === 2025,
-        engine: 'SQL_CORE',
+        activeMonth: opMonth,
+        engine: 'SQL_MASTER',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -117,15 +121,17 @@ const Dashboard: React.FC = () => {
 
       setStats(newStats);
       
-      setTimeout(async () => {
+      // Attempt AI Strategic Summary
+      try {
         const brief = await generateStrategicBrief(newStats);
         if (brief) {
           setAiBrief(brief.text);
-          setStats(prev => prev ? {...prev, engine: brief.engine} : null);
         } else {
-          setAiBrief(`Operational update: Current period revenue is R${mRev.toLocaleString()}. Dashboard data synchronized successfully.`);
+          setAiBrief(`Operational update for ${opMonth}/${opYear}: Revenue recognized at R${mRev.toLocaleString()}. Dashboard synced with production.`);
         }
-      }, 500);
+      } catch (err) {
+        setAiBrief(`Reporting active. Current period: ${opMonth}/${opYear}. Total Sales: R${mRev.toLocaleString()}. (Strategic AI currently offline)`);
+      }
 
     } finally {
       setIsRefreshing(false);
@@ -136,45 +142,41 @@ const Dashboard: React.FC = () => {
 
   if (!stats) return (
     <div className="flex flex-col items-center justify-center h-full space-y-6">
-      <div className="relative">
-        <div className="w-20 h-20 border-4 border-slate-800 rounded-full"></div>
-        <div className="w-20 h-20 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
-      </div>
-      <div className="text-center space-y-1">
-        <p className="text-sm font-black text-white uppercase tracking-widest">Bridging Ultisales Data</p>
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] italic">v3.8 Metadata Link Active</p>
+      <div className="w-16 h-16 border-4 border-slate-800 border-t-emerald-500 rounded-full animate-spin"></div>
+      <div className="text-center">
+        <p className="text-xs font-black text-white uppercase tracking-widest">Bridging SQL Production</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.2 Active Search</p>
       </div>
     </div>
   );
 
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
   return (
     <div className="p-4 md:p-10 max-w-[1600px] mx-auto space-y-8 overflow-y-auto h-full pb-32 custom-scrollbar">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 print:hidden">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
-             <div className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${stats.engine.includes('GEMINI') ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-blue-500/10 border-blue-500/30 text-blue-500'}`}>
-                {stats.engine} ACTIVE
-             </div>
              <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">Executive <span className="text-emerald-500">Suite</span></h1>
+             <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                LIVE PRODUCTION
+             </div>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">
-            Ultisales DB: <span className={stats.isFallback ? 'text-amber-500' : 'text-emerald-500'}>{stats.activeYear} {stats.isFallback ? '(Historical)' : '(Production)'}</span>
+            Period: <span className="text-emerald-400">{monthNames[stats.activeMonth - 1]} {stats.activeYear}</span> (Detected from DB)
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => window.print()} className="px-6 py-3 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 transition-all">Export Analysis</button>
-          <button onClick={fetchBIData} className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white">
-             {isRefreshing ? <span className="animate-spin inline-block">🔄</span> : '🔄'}
-          </button>
-        </div>
+        <button onClick={fetchBIData} className="flex items-center gap-2 px-6 py-3 bg-slate-900 border border-slate-800 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all text-emerald-500">
+           {isRefreshing ? "Synchronizing..." : "Manual Refresh"} 🔄
+        </button>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: "Net Revenue (MTD)", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'text-emerald-400' },
+          { label: "Net Revenue", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'text-emerald-400' },
           { label: "Growth Index", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: stats.kpis.growthRate >= 0 ? 'text-blue-400' : 'text-rose-400' },
-          { label: "Stock Warnings", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'text-rose-400' },
-          { label: "Ticket Average", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'text-amber-400' }
+          { label: "Inventory Alerts", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'text-rose-400' },
+          { label: "Avg Ticket", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'text-amber-400' }
         ].map((kpi, i) => (
           <div key={i} className="bg-slate-900 border border-slate-800/80 p-6 rounded-[2rem] shadow-xl group hover:border-emerald-500/40 transition-all">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">{kpi.label}</span>
@@ -189,16 +191,16 @@ const Dashboard: React.FC = () => {
       <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl relative border-l-8 border-l-emerald-600">
         <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none text-9xl">🧠</div>
         <div className="flex-1 space-y-4">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter leading-none">AI Strategic Summary</h2>
+          <h2 className="text-xs font-black text-emerald-500 uppercase tracking-widest">AI Strategic Forecast</h2>
           <p className="text-slate-200 text-lg md:text-2xl font-medium italic leading-relaxed py-2">"{aiBrief}"</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Revenue Momentum <span className="text-emerald-500">{stats.activeYear}</span></h2>
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Revenue Momentum</h2>
           <div className="h-[350px]">
-            {stats.salesYoY.length > 0 ? (
+            {stats.salesYoY && stats.salesYoY.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.salesYoY}>
                   <defs>
@@ -208,21 +210,22 @@ const Dashboard: React.FC = () => {
                   <XAxis dataKey="day" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
                   <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
-                  <Area name="Revenue" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#curr)" strokeWidth={4} />
+                  <Area name="Sales" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#curr)" strokeWidth={4} />
+                  <Area name="Last Year" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-2xl">
-                <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Zero transactions detected for period</p>
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-3xl">
+                <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">No transaction data for {monthNames[stats.activeMonth - 1]}</p>
               </div>
             )}
           </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Transaction Profile</h2>
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Service Composition</h2>
           <div className="w-full h-[350px]">
-            {stats.composition.length > 0 ? (
+            {stats.composition && stats.composition.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={8}>
@@ -233,8 +236,8 @@ const Dashboard: React.FC = () => {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-2xl">
-                <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Categorization Link Offline</p>
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-3xl">
+                <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Distribution data unavailable</p>
               </div>
             )}
           </div>
