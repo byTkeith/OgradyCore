@@ -7,9 +7,10 @@ interface SidebarProps {
   setActiveSection: (section: AppSection) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  connStatus?: 'testing' | 'online' | 'db_error' | 'offline';
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeSection, setActiveSection, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeSection, setActiveSection, isOpen, onClose, connStatus = 'offline' }) => {
   const navItems = [
     { id: AppSection.DASHBOARD, label: 'Dashboard', icon: '📊' },
     { id: AppSection.ANALYST_CHAT, label: 'AI Analyst', icon: '🧠' },
@@ -64,11 +65,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, setActiveSection, isOp
           <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Connectivity</span>
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+              <span className={`flex h-2 w-2 rounded-full transition-all duration-500 ${
+                connStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 
+                connStatus === 'db_error' ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' :
+                'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+              }`}></span>
             </div>
             <div className="space-y-1">
-              <p className="text-[10px] font-mono text-slate-300 truncate">192.168.8.28:54927</p>
-              <p className="text-[9px] text-emerald-500 mt-2 font-bold bg-emerald-500/10 py-1 px-2 rounded inline-block">Ultisales Master</p>
+              <p className="text-[10px] font-mono text-slate-300 truncate">SQL BRIDGE ACTIVE</p>
+              <p className={`text-[9px] mt-2 font-bold py-1 px-2 rounded inline-block uppercase tracking-widest ${
+                connStatus === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 
+                connStatus === 'db_error' ? 'bg-amber-500/10 text-amber-500' :
+                'bg-rose-500/10 text-rose-500'
+              }`}>
+                {connStatus === 'online' ? 'Linked' : connStatus === 'db_error' ? 'DB Down' : 'Offline'}
+              </p>
             </div>
           </div>
         </div>

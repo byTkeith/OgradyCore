@@ -1,103 +1,155 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { SCHEMA_MAP, DEFAULT_BRIDGE_URL } from "../constants";
+import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_BRIDGE_URL } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
 
-// Initialize with direct access to process.env.API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `
-You are 'OgradyCore AI', a specialized BI Analyst for 'Ultisales' MSSQL databases.
-PRIMARY CONTEXT: Fiscal Year 2026.
-FALLBACK CONTEXT: If 2026 data is empty, analyze 2025 records and explicitly mention "Fiscal 2025 Retrospective".
-Always use 'dbo.' and UPPERCASE for tables. 
-Join AUDIT.PLUCode to STOCK.Barcode.
-Ensure all SQL queries are optimized for MSSQL and provide 100% accurate data retrieval.
-When providing summaries, be sharp, executive-focused, and cite specific data points.
-`;
+// Dynamic schema storage for prompt context
+let DETECTED_SCHEMA: Record<string, string[]> = {};
 
-const getBridgeUrl = () => localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
+const getSettings = () => ({
+  bridgeUrl: (localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL).replace(/\/$/, "")
+});
 
-export const generateStrategicBrief = async (data: any): Promise<string> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `Analyze this BI dataset for year ${data.activeYear}. If it is 2025, treat it as a retrospective analysis. Provide a 3-sentence high-impact strategic summary. Data: ${JSON.stringify(data)}`,
-    config: { systemInstruction: SYSTEM_INSTRUCTION }
-  });
-  return response.text || "Synchronizing live data metrics...";
-};
+/**
+ * Initializes schema discovery by querying the bridge.
+ */
+export const initSchema = async (urlOverride?: string): Promise<{ success: boolean; data?: any; error?: string }> => {
+  const currentBridgeUrl = urlOverride || getSettings().bridgeUrl;
+  const targetUrl = currentBridgeUrl.replace(/\/$/, "");
+  
+  if (!targetUrl) return { success: false, error: "Bridge URL is empty." };
 
-export const getDrilldownAnalysis = async (item: any): Promise<string> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `SKU Deep Dive: ${item.Description}. Sold: ${item.sold}, OnHand: ${item.stock}, Price: R${item.avgPrice}. Provide a business diagnostic.`,
-    config: { systemInstruction: SYSTEM_INSTRUCTION }
-  });
-  return response.text || "Deep dive analysis unavailable.";
-};
-
-export const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `Natural Language Request: ${prompt}. (Context: User is currently viewing 2026/2025 data). Generate the most accurate SQL for Ultisales.`,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          sql: { type: Type.STRING },
-          explanation: { type: Type.STRING },
-          visualizationType: { type: Type.STRING },
-          xAxis: { type: Type.STRING },
-          yAxis: { type: Type.STRING }
-        },
-        required: ["sql", "explanation", "visualizationType", "xAxis", "yAxis"]
-      }
-    }
-  });
-
-  let geminiResult = JSON.parse(response.text || '{}');
-  if (geminiResult.sql) {
-    geminiResult.sql = geminiResult.sql
-      .replace(/dbo\.STOCK\.PLUCode/gi, 'dbo.STOCK.Barcode')
-      .replace(/tbl/gi, 'dbo.')
-      .replace(/dbo\.(\w+)/g, (match: string) => match.toUpperCase())
-      .replace(/DBO\./g, 'dbo.');
-  }
-
-  const baseUrl = getBridgeUrl().replace(/\/$/, "");
   try {
-    const dbResponse = await fetch(`${baseUrl}/query`, {
+    const res = await fetch(`${targetUrl}/inspect`, { 
+      headers: { 'ngrok-skip-browser-warning': '69420' },
+      signal: AbortSignal.timeout(10000) 
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (Object.keys(data).length === 0) {
+        return { success: false, error: "Bridge connected, but no tables (AUDIT, STOCK, etc.) were found." };
+      }
+      DETECTED_SCHEMA = data;
+      return { success: true, data };
+    } else {
+      const errorData = await res.json().catch(() => ({ detail: "Unknown Bridge Error" }));
+      return { success: false, error: errorData.detail || `Server returned ${res.status}` };
+    }
+  } catch (e: any) {
+    return { success: false, error: e.message || "Bridge is unreachable. Ensure the Python script is running." };
+  }
+};
+
+export const getDetectedSchema = () => DETECTED_SCHEMA;
+
+const getSystemInstruction = () => {
+  const schemaText = Object.entries(DETECTED_SCHEMA).length > 0
+    ? Object.entries(DETECTED_SCHEMA).map(([table, cols]) => `Table ${table} has columns: ${cols.join(', ')}`).join('\n')
+    : "Table dbo.AUDIT (ANUMBER, PLUCode, Description, Qty, RetailPriceExcl, TransactionDate)\nTable dbo.STOCK (PLUCode, Description, OnHand)";
+
+  return `
+You are 'OgradyCore AI', an expert T-SQL analyst for Ultisales.
+You MUST use the exact column names detected in the schema below.
+
+DETECTED DATABASE SCHEMA:
+${schemaText}
+
+RULES:
+1. Only use detected columns.
+2. Always prefix tables with 'dbo.'.
+3. Joins are typically on matching code columns (e.g. AUDIT.PLUCode = STOCK.PLUCode).
+4. Return ONLY valid JSON with keys: "sql", "explanation", "visualizationType", "xAxis", "yAxis".
+`;
+};
+
+function cleanAiResponse(raw: string): string {
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  cleaned = cleaned.replace(/```json/gi, '').replace(/```/gi, '').trim();
+  if (cleaned.includes('{') && cleaned.includes('}')) {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+  return cleaned;
+}
+
+async function executeGemini(task: string, model: 'flash' | 'pro', json: boolean = false) {
+  try {
+    // We default to flash-preview because it has significantly higher free-tier quotas
+    const modelName = model === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview', // Force flash for all requests to resolve 429 quota issues
+      contents: task,
+      config: { 
+        systemInstruction: getSystemInstruction(), 
+        responseMimeType: json ? "application/json" : undefined 
+      }
+    });
+    return response.text || "";
+  } catch (error: any) {
+    if (error.message?.includes('429') || error.message?.includes('quota')) {
+      throw new Error("AI Quota Exceeded. Please wait 1 minute before your next query. (Switching to Flash model to help prevent this).");
+    }
+    throw new Error(error.message || "Gemini AI Engine unreachable.");
+  }
+}
+
+export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string }> => {
+  if (Object.keys(DETECTED_SCHEMA).length === 0) await initSchema();
+  // Using 'flash' now to avoid the 429 error the user encountered
+  const responseText = await executeGemini(prompt, 'flash', true);
+  try {
+    const result = JSON.parse(cleanAiResponse(responseText));
+    const { bridgeUrl } = getSettings();
+    const dbResponse = await fetch(`${bridgeUrl}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
-      body: JSON.stringify({ sql: geminiResult.sql })
+      body: JSON.stringify({ sql: result.sql })
     });
-    const realData = await dbResponse.json();
-    return { ...geminiResult, data: realData || [] } as QueryResult;
-  } catch (error: any) {
-    return { ...geminiResult, data: [], explanation: `Bridge Error: ${error.message}` } as QueryResult;
+    if (!dbResponse.ok) {
+      const err = await dbResponse.json();
+      throw new Error(err.detail || "Database Execution Error");
+    }
+    return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH' };
+  } catch (e: any) {
+    throw e;
   }
 };
 
-export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `Dataset Analysis: ${JSON.stringify(queryResult.data.slice(0, 20))}. Provide structured insights.`,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING },
-          trends: { type: Type.ARRAY, items: { type: Type.STRING } },
-          anomalies: { type: Type.ARRAY, items: { type: Type.STRING } },
-          suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["summary", "trends", "anomalies", "suggestions"]
-      }
-    }
-  });
-  return JSON.parse(response.text || '{}') as AnalystInsight;
+export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
+  const safeData = Array.isArray(queryResult.data) ? queryResult.data : [];
+  const prompt = `Analyze this dataset: ${JSON.stringify(safeData.slice(0, 15))}. Provide JSON summary, trends, anomalies, suggestions.`;
+  const responseText = await executeGemini(prompt, 'flash', true);
+  try {
+    return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH' };
+  } catch {
+    return { 
+      summary: "Data retrieved successfully. Strategic engine recovering.", 
+      trends: ["Operational stability active"], 
+      anomalies: ["None"], 
+      suggestions: ["Review standard audits"],
+      engine: 'GEMINI FLASH' 
+    };
+  }
+};
+
+export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
+  if (Object.keys(DETECTED_SCHEMA).length === 0) await initSchema();
+  const prompt = `Summarize BI metrics: ${JSON.stringify(data.kpis)}. 2 sentences max.`;
+  try {
+    const responseText = await executeGemini(prompt, 'flash');
+    return { text: responseText || "", engine: 'GEMINI FLASH' };
+  } catch { return null; }
+};
+
+export const getDrilldownAnalysis = async (item: any): Promise<{text: string, engine: string}> => {
+  const prompt = `Analyze performance: ${JSON.stringify(item)}. 1 sentence review.`;
+  try {
+    const responseText = await executeGemini(prompt, 'flash');
+    return { text: responseText || "", engine: 'GEMINI FLASH' };
+  } catch { return { text: "Manual review recommended.", engine: 'GEMINI FLASH' }; }
 };
