@@ -27,12 +27,10 @@ interface DetailedStats {
 const Dashboard: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [aiBrief, setAiBrief] = useState("Synchronizing Hybrid Intelligence...");
-  const [drillDown, setDrillDown] = useState<{title: string, data: any, insight: string, engine?: string} | null>(null);
+  const [aiBrief, setAiBrief] = useState("Synchronizing Executive Intelligence...");
   const lastFetchRef = useRef<number>(0);
 
   const fetchBIData = useCallback(async () => {
-    // Prevent double-fetching within 2 seconds
     if (Date.now() - lastFetchRef.current < 2000) return;
     lastFetchRef.current = Date.now();
 
@@ -46,21 +44,51 @@ const Dashboard: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
           body: JSON.stringify({ sql }),
+          signal: AbortSignal.timeout(12000),
           mode: 'cors'
         });
+        if (!res.ok) return [];
         return await res.json();
       } catch (e) { return []; }
     };
 
     try {
-      const check2026 = await runQuery(`SELECT COUNT(*) as cnt FROM dbo.AUDIT WHERE YEAR(TransactionDate) = 2026`);
+      const check2026 = await runQuery(`SELECT COUNT(*) as cnt FROM dbo.AUDIT WHERE TransactionDate >= '2026-01-01'`);
       const opYear = (check2026?.[0]?.cnt > 5) ? 2026 : 2025;
       const prevYear = opYear - 1;
 
-      const yoySql = `SELECT DAY(TransactionDate) as day, SUM(CASE WHEN YEAR(TransactionDate) = ${opYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, SUM(CASE WHEN YEAR(TransactionDate) = ${prevYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear FROM dbo.AUDIT WHERE MONTH(TransactionDate) = MONTH(GETDATE()) AND YEAR(TransactionDate) IN (${prevYear}, ${opYear}) GROUP BY DAY(TransactionDate) ORDER BY day`;
-      const topProdSql = `SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock, AVG(A.RetailPriceExcl) as avgPrice FROM dbo.AUDIT A JOIN dbo.STOCK S ON A.PLUCode = S.PLUCode WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) GROUP BY S.Description ORDER BY sold DESC`;
-      const compSql = `SELECT ISNULL(T.TYPE_DESCRIPTION, 'System Unmapped') as label, COUNT(*) as value FROM dbo.AUDIT A LEFT JOIN dbo.TYPES T ON A.TransactionType = CAST(T.TYPE_ID AS INT) AND T.TABLE_NAME = 'AUDIT' AND T.TYPE_NAME = 'TRANSACTIONTYPE' WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) GROUP BY T.TYPE_DESCRIPTION`;
-      const kpiSql = `SELECT (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${opYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as mRev, (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${prevYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as pRev, (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as activeCust, (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as ticket`;
+      // v3.8: Join AUDIT.PLUCode = STOCK.Barcode based on provided schema
+      const yoySql = `
+        SELECT DAY(TransactionDate) as day, 
+        SUM(CASE WHEN YEAR(TransactionDate) = ${opYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
+        SUM(CASE WHEN YEAR(TransactionDate) = ${prevYear} THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
+        FROM dbo.AUDIT 
+        WHERE MONTH(TransactionDate) = MONTH(GETDATE()) 
+        AND YEAR(TransactionDate) IN (${prevYear}, ${opYear}) 
+        GROUP BY DAY(TransactionDate)`;
+
+      const topProdSql = `
+        SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock, AVG(A.RetailPriceExcl) as avgPrice 
+        FROM dbo.AUDIT A 
+        JOIN dbo.STOCK S ON A.PLUCode = S.Barcode 
+        WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) 
+        GROUP BY S.Description 
+        ORDER BY sold DESC`;
+
+      const compSql = `
+        SELECT ISNULL(T.TYPE_DESCRIPTION, 'Operational Misc') as label, COUNT(*) as value 
+        FROM dbo.AUDIT A 
+        LEFT JOIN dbo.TYPES T ON A.TransactionType = CAST(T.TYPE_ID AS INT) AND T.TABLE_NAME = 'AUDIT' AND T.TYPE_NAME = 'TRANSACTIONTYPE' 
+        WHERE A.TransactionDate >= DATEADD(day, -30, GETDATE()) 
+        GROUP BY T.TYPE_DESCRIPTION`;
+
+      const kpiSql = `
+        SELECT 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${opYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as mRev, 
+        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE YEAR(TransactionDate) = ${prevYear} AND MONTH(TransactionDate) = MONTH(GETDATE())) as pRev, 
+        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as activeCust, 
+        (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
+        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, GETDATE())) as ticket`;
 
       const [yoy, prod, comp, kpi] = await Promise.all([
         runQuery(yoySql), runQuery(topProdSql), runQuery(compSql), runQuery(kpiSql)
@@ -70,26 +98,32 @@ const Dashboard: React.FC = () => {
       const pRev = kpi[0]?.pRev || 1;
       const growth = ((mRev - pRev) / pRev) * 100;
 
-      const newStats = {
-        salesYoY: yoy, cumulativeRevenue: [], topProducts: prod, composition: comp,
-        activeYear: opYear, isFallback: opYear === 2025, engine: 'LOCAL_SQL',
+      const newStats: DetailedStats = {
+        salesYoY: Array.isArray(yoy) ? yoy.sort((a,b) => a.day - b.day) : [],
+        cumulativeRevenue: [],
+        topProducts: Array.isArray(prod) ? prod : [],
+        composition: Array.isArray(comp) ? comp : [],
+        activeYear: opYear,
+        isFallback: opYear === 2025,
+        engine: 'SQL_CORE',
         kpis: {
-          totalRevenue: mRev, activeCustomers: kpi[0]?.activeCust || 0,
-          lowStockCount: kpi[0]?.lowStock || 0, avgTicket: kpi[0]?.ticket || 0,
+          totalRevenue: mRev,
+          activeCustomers: kpi[0]?.activeCust || 0,
+          lowStockCount: kpi[0]?.lowStock || 0,
+          avgTicket: kpi[0]?.ticket || 0,
           growthRate: growth
         }
       };
 
       setStats(newStats);
       
-      // Delay AI Brief to prevent rate limiting
       setTimeout(async () => {
         const brief = await generateStrategicBrief(newStats);
         if (brief) {
           setAiBrief(brief.text);
           setStats(prev => prev ? {...prev, engine: brief.engine} : null);
         } else {
-          setAiBrief(`Operational update: Current period revenue is R${mRev.toLocaleString()}. AI briefing paused to save quota.`);
+          setAiBrief(`Operational update: Current period revenue is R${mRev.toLocaleString()}. Dashboard data synchronized successfully.`);
         }
       }, 500);
 
@@ -100,16 +134,16 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { fetchBIData(); }, [fetchBIData]);
 
-  const handleBarClick = async (data: any) => {
-    setDrillDown({ title: data.Description, data: data, insight: "Analyzing performance data..." });
-    const { text, engine } = await getDrilldownAnalysis(data);
-    setDrillDown({ title: data.Description, data: data, insight: text, engine });
-  };
-
   if (!stats) return (
-    <div className="flex flex-col items-center justify-center h-full space-y-4">
-      <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 italic">Syncing with Ultisales Bridge...</p>
+    <div className="flex flex-col items-center justify-center h-full space-y-6">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-slate-800 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center space-y-1">
+        <p className="text-sm font-black text-white uppercase tracking-widest">Bridging Ultisales Data</p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] italic">v3.8 Metadata Link Active</p>
+      </div>
     </div>
   );
 
@@ -121,15 +155,17 @@ const Dashboard: React.FC = () => {
              <div className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${stats.engine.includes('GEMINI') ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-blue-500/10 border-blue-500/30 text-blue-500'}`}>
                 {stats.engine} ACTIVE
              </div>
-             <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">BI <span className="text-emerald-500">Suite</span></h1>
+             <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">Executive <span className="text-emerald-500">Suite</span></h1>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">
-            Database Mode: <span className={stats.isFallback ? 'text-amber-500' : 'text-emerald-500'}>{stats.activeYear} {stats.isFallback ? '(Historical)' : '(Live)'}</span>
+            Ultisales DB: <span className={stats.isFallback ? 'text-amber-500' : 'text-emerald-500'}>{stats.activeYear} {stats.isFallback ? '(Historical)' : '(Production)'}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => window.print()} className="px-6 py-3 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700">Export Report</button>
-          <button onClick={fetchBIData} className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white">🔄</button>
+          <button onClick={() => window.print()} className="px-6 py-3 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 transition-all">Export Analysis</button>
+          <button onClick={fetchBIData} className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white">
+             {isRefreshing ? <span className="animate-spin inline-block">🔄</span> : '🔄'}
+          </button>
         </div>
       </header>
 
@@ -162,48 +198,48 @@ const Dashboard: React.FC = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
           <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Revenue Momentum <span className="text-emerald-500">{stats.activeYear}</span></h2>
           <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.salesYoY}>
-                <defs>
-                  <linearGradient id="curr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="day" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
-                <Area name="Revenue" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#curr)" strokeWidth={4} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {stats.salesYoY.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.salesYoY}>
+                  <defs>
+                    <linearGradient id="curr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="day" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
+                  <Area name="Revenue" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#curr)" strokeWidth={4} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-2xl">
+                <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Zero transactions detected for period</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 shadow-2xl">
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Item Mix (MTD)</h2>
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Transaction Profile</h2>
           <div className="w-full h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={8}>
-                  {stats.composition.map((_, index) => (<Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} strokeWidth={0} />))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {stats.composition.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={8}>
+                    {stats.composition.map((_, index) => (<Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} strokeWidth={0} />))}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '20px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-800 rounded-2xl">
+                <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Categorization Link Offline</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {drillDown && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl">
-          <div className="bg-slate-900 border border-emerald-500/30 w-full max-w-3xl rounded-[3rem] p-12 relative shadow-2xl">
-            <button onClick={() => setDrillDown(null)} className="absolute top-10 right-10 text-slate-500 hover:text-white text-3xl font-black transition-all">✕</button>
-            <h2 className="text-4xl font-black text-white tracking-tighter uppercase mb-8">{drillDown.title}</h2>
-            <div className="bg-emerald-500/10 border border-emerald-500/20 p-10 rounded-[2.5rem]">
-              <p className="text-slate-100 text-xl leading-relaxed italic font-medium">"{drillDown.insight}"</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

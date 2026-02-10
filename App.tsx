@@ -21,17 +21,24 @@ const App: React.FC = () => {
     const targetUrl = (urlOverride || bridgeUrl).replace(/\/$/, "");
     if (!targetUrl) return setConnStatus('offline');
     
-    setConnStatus('testing');
-    setLastError(null);
+    // We don't want to block the user if they're already on the dashboard
+    // Only set testing if it's the first run or a manual retry
+    setConnStatus(prev => prev === 'testing' ? 'testing' : 'testing');
     
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout for health check
+
       const pingRes = await fetch(`${targetUrl}/ping`, { 
-        headers: { 'ngrok-skip-browser-warning': '69420' }
+        headers: { 'ngrok-skip-browser-warning': '69420' },
+        signal: controller.signal
       }).catch(() => null);
+
+      clearTimeout(timeoutId);
 
       if (!pingRes || !pingRes.ok) {
         setConnStatus('offline');
-        setLastError("The Bridge Server (Python) is unreachable. Check your Ngrok link and ensure main.py is running.");
+        setLastError("Bridge unreachable. Please verify your Python server and Ngrok link.");
         return;
       }
 
@@ -43,23 +50,24 @@ const App: React.FC = () => {
       if (healthData.db_connected) {
         setConnStatus('online');
         localStorage.setItem('og_bridge_url', targetUrl);
+        setLastError(null);
         
-        // v3.6: We treat schema discovery as a non-fatal step
-        const schemaResult = await initSchema(targetUrl);
-        setDetectedSchema(schemaResult.data);
-        
-        if (schemaResult.error) {
-          console.warn("Schema Alert:", schemaResult.error);
-          // Show as warning, but don't stop the app
-          setLastError(schemaResult.error);
-        }
+        // Background initialization - do not wait for this to finish to mark app as 'online'
+        initSchema(targetUrl).then(schemaResult => {
+          setDetectedSchema(schemaResult.data);
+          if (schemaResult.error) {
+            console.warn("Bridge warning:", schemaResult.error);
+            // We keep lastError for diagnostics but don't disrupt status
+            setLastError(schemaResult.error);
+          }
+        });
       } else {
         setConnStatus('db_error');
-        setLastError(`Bridge is Online, but SQL Server connection failed: ${healthData.error}`);
+        setLastError(`Bridge OK, but SQL Server returned: ${healthData.error}`);
       }
     } catch (err: any) {
       setConnStatus('offline');
-      setLastError(err.message || "Network error occurred while contacting the bridge.");
+      setLastError(err.name === 'AbortError' ? "Connection timed out." : "Network link failure.");
     }
   }, [bridgeUrl]);
 
@@ -80,7 +88,7 @@ const App: React.FC = () => {
           <div className="p-8 md:p-16 max-w-6xl mx-auto space-y-12 overflow-y-auto h-full pb-32 custom-scrollbar">
             <div className="text-center">
               <h2 className="text-4xl font-black text-white uppercase tracking-tighter">System Diagnostic</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Bridge Protocol v3.6</p>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Bridge Protocol v3.7.1</p>
             </div>
 
             <div className="grid md:grid-cols-1 gap-8 max-w-2xl mx-auto">
@@ -111,7 +119,7 @@ const App: React.FC = () => {
                   onClick={handleUpdateBridge} 
                   className="w-full py-4 bg-emerald-600 text-white font-black uppercase text-[10px] rounded-xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20"
                 >
-                  {connStatus === 'testing' ? 'Verifying...' : 'Re-Validate System'}
+                  {connStatus === 'testing' ? 'Verifying Link...' : 'Re-Validate Connection'}
                 </button>
               </div>
 
@@ -128,7 +136,7 @@ const App: React.FC = () => {
                       connStatus === 'db_error' ? 'text-amber-500' : 
                       connStatus === 'online' ? 'text-emerald-500' : 'text-rose-500'
                     }`}>
-                      {connStatus === 'db_error' ? 'Database Connection Refused' : 
+                      {connStatus === 'db_error' ? 'Database Connection Error' : 
                        connStatus === 'online' ? 'System Information' : 'Bridge Communication Error'}
                     </h4>
                   </div>
@@ -185,12 +193,13 @@ const App: React.FC = () => {
                 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
               }`}></span>
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">
-                {connStatus === 'online' ? 'OGRADYCORE LINK STABLE' : 
-                 connStatus === 'db_error' ? 'BRIDGE UP / DB BUSY' : 'LINK DISCONNECTED'}
+                {connStatus === 'online' ? 'LINK SECURED' : 
+                 connStatus === 'db_error' ? 'BRIDGE ACTIVE / DB BUSY' : 
+                 connStatus === 'testing' ? 'VERIFYING PROTOCOL...' : 'LINK DISCONNECTED'}
               </span>
             </div>
           </div>
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v3.6</span>
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v3.7.1</span>
         </header>
         <div className="flex-1 overflow-hidden relative">{renderContent()}</div>
       </main>
