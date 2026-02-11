@@ -34,15 +34,15 @@ const getSystemInstruction = () => {
   const validSalesTypes = SALES_TRANSACTION_TYPES.join("','");
 
   return `
-You are 'OgradyCore AI v7.2', the Principal T-SQL Architect for the UltiSales ERP Database.
+You are 'OgradyCore AI v7.3', the Principal T-SQL Architect for the UltiSales ERP Database.
 Your directive is to generate syntactically perfect T-SQL queries.
 
 ### 1. CRITICAL SCHEMA RULES (DO NOT HALLUCINATE)
+- **DATABASE CONTEXT:** ALWAYS start with \`USE [UltiSales];\` followed by \`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\`
 - **CUSTOMER NAMES:** The \`dbo.DEBTOR\` table uses the column **\`Surname\`**. 
   - ❌ WRONG: \`SELECT Name FROM dbo.DEBTOR\`
   - ✅ CORRECT: \`SELECT Surname FROM dbo.DEBTOR\`
 - **REVENUE FORMULA:** \`ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)\`
-- **ISOLATION:** ALWAYS start with \`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\`
 
 ### 2. TRANSACTION TYPES & THE 'TYPES' TABLE
 The \`dbo.TYPES\` table defines the meaning of codes. 
@@ -96,8 +96,14 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   const { bridgeUrl } = getSettings();
   
   let finalSql = result.sql;
+  
+  // V7.3: Strict enforcement of Isolation Level and DB Context
   if (!finalSql.toUpperCase().includes('SET TRANSACTION ISOLATION')) {
     finalSql = `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${finalSql}`;
+  }
+  
+  if (!finalSql.toUpperCase().trim().startsWith('USE ')) {
+    finalSql = `USE [UltiSales]; ${finalSql}`;
   }
 
   const dbResponse = await fetch(`${bridgeUrl}/query`, {
@@ -112,7 +118,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     throw new Error(errData.detail || "Bridge Execution Error.");
   }
   
-  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v7.2' };
+  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v7.3' };
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
@@ -126,7 +132,7 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
   const responseText = response.text;
   if (!responseText) throw new Error("Insight failed.");
 
-  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v7.2' };
+  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v7.3' };
 };
 
 export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
@@ -135,6 +141,6 @@ export const generateStrategicBrief = async (data: any): Promise<{text: string, 
       model: 'gemini-3-flash-preview',
       contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. 2 sentence summary.`,
     });
-    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.2' };
+    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.3' };
   } catch { return null; }
 };
