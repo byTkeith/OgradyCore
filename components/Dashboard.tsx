@@ -56,7 +56,8 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
           body: JSON.stringify({ sql: `USE [UltiSales]; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${sql}` }),
-          signal: AbortSignal.timeout(20000),
+          // V7.7: Increased timeout to 60s for heavy aggregations
+          signal: AbortSignal.timeout(60000),
         });
         if (!res.ok) {
             const errText = await res.text().catch(() => res.statusText);
@@ -176,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v7.6',
+        engine: 'SQL_MASTER_v7.7',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -220,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.6 Intelligence Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.7 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -231,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.6 LIVE</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.7 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
             Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
@@ -268,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         </div>
       </div>
 
-      {/* Strategic Enamel Insight Table - Enhanced v7.6 */}
+      {/* Strategic Enamel Insight Table - Enhanced v7.7 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
          <div className="flex items-center justify-between mb-12">
             <div>

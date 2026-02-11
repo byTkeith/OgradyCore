@@ -112,7 +112,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
     body: JSON.stringify({ sql: finalSql }),
-    signal: AbortSignal.timeout(30000)
+    signal: AbortSignal.timeout(60000)
   });
 
   if (!dbResponse.ok) {
