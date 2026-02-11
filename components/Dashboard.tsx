@@ -60,11 +60,11 @@ const Dashboard: React.FC = () => {
       if (isNaN(refDate.getTime())) refDate = new Date();
       const refDateIso = refDate.toISOString().split('T')[0];
 
-      // Prepare safe string for SQL IN clause
+      // Prepare safe string for SQL IN clause using the Expanded Sales Definition
       const salesTypesSql = `'${SALES_TRANSACTION_TYPES.join("','")}'`;
 
       // 2. Enamel Trends - The "Golden Path" Query
-      // Now using the comprehensive list of sales types
+      // Uses correct column: D.Surname (not Name)
       const enamelTrendSql = `
         WITH RawEnamelData AS (
             SELECT 
@@ -119,13 +119,16 @@ const Dashboard: React.FC = () => {
         AND TransactionType IN (${salesTypesSql})
         GROUP BY DAY(TransactionDate)`;
 
-      // 4. Sales Composition (Pie Chart)
+      // 4. Sales Composition (Pie Chart) - Joining TYPES table for correct labels
       const compSql = `
-        SELECT TOP 5 TransactionType, COUNT(*) as value 
-        FROM dbo.AUDIT 
-        WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
-        AND TransactionType IN (${salesTypesSql})
-        GROUP BY TransactionType`;
+        SELECT TOP 5 
+            ISNULL(T.TYPE_DESCRIPTION, 'Type ' + CAST(A.TransactionType AS VARCHAR)) as label,
+            COUNT(*) as value 
+        FROM dbo.AUDIT A
+        LEFT JOIN dbo.TYPES T ON T.TABLE_ID = 3 AND T.TYPE_NAME_ID = 4 AND T.TYPE_ID = CAST(A.TransactionType AS VARCHAR)
+        WHERE A.TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
+        AND A.TransactionType IN (${salesTypesSql})
+        GROUP BY T.TYPE_DESCRIPTION, A.TransactionType`;
 
       // 5. KPIs
       const kpiSql = `
@@ -140,22 +143,23 @@ const Dashboard: React.FC = () => {
         runQuery(yoySql), runQuery(enamelTrendSql), runQuery(compSql), runQuery(kpiSql)
       ]);
 
-      const composition = compRaw.map((item: any) => ({
-        label: (DOMAIN_MAPPINGS.AUDIT.TRANSACTIONTYPE as any)[item.TransactionType.toString()] || `Type ${item.TransactionType}`,
+      // Process Composition Data
+      const composition = Array.isArray(compRaw) ? compRaw.map((item: any) => ({
+        label: item.label,
         value: item.value
-      }));
+      })) : [];
 
       const mRev = kpi[0]?.mRev || 0;
       const pRev = kpi[0]?.pRev || 1;
       const growth = ((mRev - pRev) / pRev) * 100;
 
       const newStats: DetailedStats = {
-        salesYoY: Array.isArray(yoy) ? yoy.sort((a,b) => a.day - b.day) : [],
+        salesYoY: Array.isArray(yoy) ? yoy.sort((a: any, b: any) => a.day - b.day) : [],
         topAccounts: [], 
         enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v7.1',
+        engine: 'SQL_MASTER_v7.2',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -183,7 +187,7 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.1 Intelligence Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.2 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -194,7 +198,7 @@ const Dashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.1 LIVE</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.2 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
             Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
@@ -231,7 +235,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Strategic Enamel Insight Table - Enhanced v7.1 */}
+      {/* Strategic Enamel Insight Table - Enhanced v7.2 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
          <div className="flex items-center justify-between mb-12">
             <div>
