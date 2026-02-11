@@ -4,7 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   Cell, Legend, PieChart, Pie
 } from 'recharts';
-import { DEFAULT_BRIDGE_URL, MOCK_CHART_COLORS } from '../constants';
+import { DEFAULT_BRIDGE_URL, MOCK_CHART_COLORS, SALES_TRANSACTION_TYPES } from '../constants';
 import { DOMAIN_MAPPINGS } from '../metadata_mappings';
 import { generateStrategicBrief } from '../services/geminiService';
 
@@ -52,6 +52,7 @@ const Dashboard: React.FC = () => {
     };
 
     try {
+      // 1. Get Base Reference Date
       const latestDateRes = await runQuery(`SELECT MAX(TransactionDate) as lastDate FROM dbo.AUDIT`);
       const lastDateStr = latestDateRes?.[0]?.lastDate;
       
@@ -59,58 +60,81 @@ const Dashboard: React.FC = () => {
       if (isNaN(refDate.getTime())) refDate = new Date();
       const refDateIso = refDate.toISOString().split('T')[0];
 
-      // Deep Analytics: Top 20 Enamel Buyers yearly for 5 years
+      // Prepare safe string for SQL IN clause
+      const salesTypesSql = `'${SALES_TRANSACTION_TYPES.join("','")}'`;
+
+      // 2. Enamel Trends - The "Golden Path" Query
+      // Now using the comprehensive list of sales types
       const enamelTrendSql = `
-        WITH EnamelAudit AS (
-            SELECT A.DebtorOrCreditorNumber, A.RetailPriceExcl, A.Qty, A.LineDiscountPerc, A.TransactionDate, A.Description
+        WITH RawEnamelData AS (
+            SELECT 
+                A.DebtorOrCreditorNumber,
+                YEAR(A.TransactionDate) AS [SaleYear],
+                ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2) AS [LineRevenue]
             FROM dbo.AUDIT A
-            WHERE A.TransactionType IN ('66','67','68','70','80','84','100')
+            WHERE A.TransactionType IN (${salesTypesSql})
               AND A.TransactionDate >= DATEADD(year, -5, '${refDateIso}')
-              AND (UPPER(A.Description) LIKE '%ENAMEL%' OR UPPER(A.Description) LIKE '%GLOSS%' OR UPPER(A.Description) LIKE '%EGGSHELL%' OR UPPER(A.Description) LIKE '%QD%')
               AND A.DebtorOrCreditorNumber <> '0'
+              AND (
+                  UPPER(A.Description) LIKE '%ENAMEL%' 
+                  OR UPPER(A.Description) LIKE '%GLOSS%' 
+                  OR UPPER(A.Description) LIKE '%EGGSHELL%' 
+                  OR UPPER(A.Description) LIKE '%QD%'
+              )
         ),
-        CustomerTotals AS (
-            SELECT DebtorOrCreditorNumber, SUM(ROUND(RetailPriceExcl * (1 - ISNULL(LineDiscountPerc, 0) / 100.0) * Qty, 2)) as TotalRev
-            FROM EnamelAudit
+        Top20BuyerIDs AS (
+            SELECT TOP 20 
+                DebtorOrCreditorNumber, 
+                SUM(LineRevenue) AS [Total5YearSpend]
+            FROM RawEnamelData
             GROUP BY DebtorOrCreditorNumber
-        ),
-        Top20IDs AS (
-            SELECT TOP 20 DebtorOrCreditorNumber, TotalRev FROM CustomerTotals ORDER BY TotalRev DESC
+            ORDER BY [Total5YearSpend] DESC
         )
         SELECT 
-            ISNULL(B.Surname, 'Account ' + A.DebtorOrCreditorNumber) as Customer,
-            YEAR(A.TransactionDate) as Year,
-            SUM(ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)) as Revenue,
-            T.TotalRev
-        FROM EnamelAudit A
-        JOIN Top20IDs T ON A.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
-        LEFT JOIN dbo.DEBTOR B ON A.DebtorOrCreditorNumber = B.Number
-        GROUP BY B.Surname, A.DebtorOrCreditorNumber, YEAR(A.TransactionDate), T.TotalRev
-        ORDER BY T.TotalRev DESC, Year DESC`;
+            ISNULL(D.Surname, 'Account: ' + R.DebtorOrCreditorNumber) AS [Customer],
+            R.[SaleYear] AS [Year],
+            SUM(R.LineRevenue) AS [Revenue],
+            T.Total5YearSpend AS [TotalRev]
+        FROM RawEnamelData R
+        JOIN Top20BuyerIDs T ON R.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
+        LEFT JOIN dbo.DEBTOR D ON R.DebtorOrCreditorNumber = D.Number
+        GROUP BY 
+            D.Surname, 
+            R.DebtorOrCreditorNumber, 
+            R.[SaleYear],
+            T.Total5YearSpend
+        ORDER BY 
+            T.Total5YearSpend DESC, 
+            [Customer] ASC, 
+            [Year] DESC;
+      `;
 
+      // 3. YoY Growth (Trailing 30 Days)
       const yoySql = `
         SELECT DAY(TransactionDate) as day, 
         SUM(CASE WHEN TransactionDate >= DATEADD(day, -30, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
         SUM(CASE WHEN TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
         FROM dbo.AUDIT 
         WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}'))
-        AND TransactionType IN ('66', '67', '68', '70', '80', '84', '100')
+        AND TransactionType IN (${salesTypesSql})
         GROUP BY DAY(TransactionDate)`;
 
+      // 4. Sales Composition (Pie Chart)
       const compSql = `
         SELECT TOP 5 TransactionType, COUNT(*) as value 
         FROM dbo.AUDIT 
         WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
-        AND TransactionType IN ('66', '67', '68', '70', '80', '84', '100')
+        AND TransactionType IN (${salesTypesSql})
         GROUP BY TransactionType`;
 
+      // 5. KPIs
       const kpiSql = `
         SELECT 
-        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as mRev, 
-        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as pRev, 
+        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as mRev, 
+        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as pRev, 
         (SELECT COUNT(DISTINCT ISNULL(DebtorOrCreditorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
-        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as ticket`;
+        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as ticket`;
 
       const [yoy, enamels, compRaw, kpi] = await Promise.all([
         runQuery(yoySql), runQuery(enamelTrendSql), runQuery(compSql), runQuery(kpiSql)
@@ -131,7 +155,7 @@ const Dashboard: React.FC = () => {
         enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v6.4',
+        engine: 'SQL_MASTER_v7.1',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -159,7 +183,7 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v6.4 Intelligence Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.1 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -170,7 +194,7 @@ const Dashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v6.4 LIVE</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.1 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
             Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
@@ -207,7 +231,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Strategic Enamel Insight Table - Enhanced v6.4 */}
+      {/* Strategic Enamel Insight Table - Enhanced v7.1 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
          <div className="flex items-center justify-between mb-12">
             <div>

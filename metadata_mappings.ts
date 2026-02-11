@@ -1,19 +1,32 @@
 
 /**
- * ULTI-SALES ENCYCLOPEDIC MAPPING - v4.4
+ * ULTI-SALES ENCYCLOPEDIC MAPPING - v4.5
  * Extracted from SQL Database Maintenance Manual (18 Pages)
+ * Source: dbo.TYPES table documentation
  */
 
 export const DOMAIN_MAPPINGS = {
   AUDIT: {
     TRANSACTIONTYPE: {
       "0": "BLANK / DOES NOT EXIST",
-      "1": "QUOTE",
-      "2": "LINE VOID",
-      "3": "REPRINTS",
-      "10": "DUMMY FIELD (FLATFILE)",
+      "1": "CASH SALES",
+      "2": "CASH SALES FROM ORDER",
+      "3": "CASH SALES RETURNS",
+      "4": "ALLOCATIONS DISPATCH",
+      "10": "CREDIT SALES",
+      "11": "CREDIT SALES FROM ORDER",
+      "12": "OPEN ITEM LAYBYE SALES",
+      "13": "OPEN ITEM LAYBYE RETURNS",
+      "14": "IBT SALES",
+      "15": "IBT SALES FROM ORDER",
+      "16": "C.O.D SALES",
+      "17": "CREDIT RETURNS",
+      "19": "DELIVERY NOTE",
+      "20": "SALES ORDERS",
+      "21": "MAIL ORDER",
       "33": "NEW DEBTOR",
-      "35": "NEW STOCK",
+      "34": "CASH FROM QUOTE",
+      "35": "CREDIT FROM QUOTE",
       "36": "DELETE STOCK",
       "37": "NEW CREDITOR",
       "38": "SPLIT PAYMENT (PURCHASES)",

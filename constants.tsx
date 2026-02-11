@@ -15,6 +15,13 @@ export const CORE_TABLES = [
   "dbo.CREDITOR"
 ];
 
+// Based on PDF Documentation Pages 6, 8, 11
+// Includes: Cash Sales (1,66), Credit Sales (10,70), Quotes (34,35), BOM (84), Contracts (100)
+export const SALES_TRANSACTION_TYPES = [
+  '1', '2', '10', '11', '12', '14', '15', '16', 
+  '34', '35', '52', '66', '67', '68', '70', '80', '84', '100'
+];
+
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.AUDIT": {
     description: "Transactional records.",

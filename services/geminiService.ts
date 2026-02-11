@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../constants";
+import { DEFAULT_BRIDGE_URL, SALES_TRANSACTION_TYPES } from "../constants";
 import { DOMAIN_MAPPINGS } from "../metadata_mappings";
 import { QueryResult, AnalystInsight } from "../types";
 
@@ -31,26 +31,43 @@ export const initSchema = async (urlOverride?: string): Promise<{ success: boole
 };
 
 const getSystemInstruction = () => {
+  // We inject the comprehensive list of sales types derived from the PDF
+  const validSalesTypes = SALES_TRANSACTION_TYPES.join("','");
+
   return `
-You are 'OgradyCore AI v6.4', Senior T-SQL Architect for Ultisales.
-You excel at Recursive Ranking for multi-year loyalty analysis.
+You are 'OgradyCore AI v7.1', the Principal T-SQL Architect for the UltiSales ERP Database.
+Your directive is to generate high-performance T-SQL queries using the documented schema.
 
-RECURSIVE RANKING PATTERN (REQUIRED for "Top X by Year"):
-1. First CTE: Filter raw data (Dates, Product Keywords, Transaction Types).
-2. Second CTE: Identify Top X IDs based on aggregate sum of the first CTE.
-3. Final SELECT: Join raw data (CTE 1) to Top IDs (CTE 2) and group by YEAR + Name.
+### 1. THE GOLDEN RULES
+- **Isolation:** ALWAYS start with \`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\`
+- **Identifying Sales:** When calculating Revenue, Sales, or Volume, filter \`TransactionType\` to include ALL valid sales codes defined in \`dbo.TYPES\`.
+  - **USE THIS LIST:** \`IN ('${validSalesTypes}')\`
+  - This list includes Legacy types (1, 10), Modern types (66, 70), Quotes (34, 35), and Contracts (100).
+- **Revenue Formula:** 
+  \`ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)\`
+- **Joins:** 
+  - \`LEFT JOIN dbo.DEBTOR B ON A.DebtorOrCreditorNumber = B.Number\` (Note: \`DebtorOrCreditorNumber\` is VARCHAR).
+- **Date Range:** Use \`DATEADD(year, -X, GETDATE())\` unless a specific date is requested.
 
-PRODUCT CATEGORY KNOWLEDGE:
-- Enamels: (UPPER(Description) LIKE '%ENAMEL%' OR UPPER(Description) LIKE '%GLOSS%' OR UPPER(Description) LIKE '%EGGSHELL%' OR UPPER(Description) LIKE '%QD%')
-- Paints: (UPPER(Description) LIKE '%PAINT%' OR UPPER(Description) LIKE '%PVA%' OR UPPER(Description) LIKE '%COATING%')
+### 2. SCHEMA INTELLIGENCE (FROM DBO.TYPES)
+You have access to the \`dbo.TYPES\` definitions via your training.
+- **dbo.AUDIT:** Main transaction table.
+- **Transaction Types:**
+  - 1, 66: Cash Sales
+  - 10, 70: Credit Sales
+  - 84: BOM/Recipe Sales
+  - 100: Contract Sales
+  - (See provided list for full coverage)
 
-GOLDEN PATH RULES:
-- ISOLATION: Always start with 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;'
-- JOINS: 'LEFT JOIN dbo.DEBTOR B ON A.DebtorOrCreditorNumber = B.Number'
-- STRINGS: Quote all IDs ('66','70', 'PEG01').
-- CALCULATION: ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)
+### 3. ADVANCED QUERY PATTERNS
+**Recursive Ranking (for "Top X Breakdown"):**
+1. CTE 1: Filter raw data (Time, Keywords, Sales Types).
+2. CTE 2: Group by Entity to find Top X (ORDER BY Total DESC).
+3. Final SELECT: Join CTE 1 & CTE 2 to show detailed breakdown for ONLY those Top X.
 
-OUTPUT: Valid JSON ONLY. {"sql": "...", "explanation": "...", "visualizationType": "bar|line|area|pie", "xAxis": "col", "yAxis": "col"}.
+### 4. OUTPUT FORMAT
+Return ONLY valid JSON:
+{"sql": "...", "explanation": "Brief logic summary", "visualizationType": "bar|line|area", "xAxis": "ColumnName", "yAxis": "ColumnName"}
 `;
 };
 
@@ -98,7 +115,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     throw new Error(errData.detail || "Bridge Execution Error.");
   }
   
-  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v6.4' };
+  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v7.1' };
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
@@ -112,7 +129,7 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
   const responseText = response.text;
   if (!responseText) throw new Error("Insight failed.");
 
-  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v6.4' };
+  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v7.1' };
 };
 
 export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
@@ -121,6 +138,6 @@ export const generateStrategicBrief = async (data: any): Promise<{text: string, 
       model: 'gemini-3-flash-preview',
       contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. 2 sentence summary.`,
     });
-    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v6.4' };
+    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.1' };
   } catch { return null; }
 };
