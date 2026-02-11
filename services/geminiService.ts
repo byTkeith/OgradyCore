@@ -32,28 +32,25 @@ export const initSchema = async (urlOverride?: string): Promise<{ success: boole
 
 const getSystemInstruction = () => {
   return `
-You are 'OgradyCore AI', the Senior T-SQL Architect for Ultisales POS.
-You have a ZERO TOLERANCE policy for hallucinating column names.
+You are 'OgradyCore AI v6.4', Senior T-SQL Architect for Ultisales.
+You excel at Recursive Ranking for multi-year loyalty analysis.
 
-SOURCE OF TRUTH (USE THESE ONLY):
-- SCHEMA_MAP: ${JSON.stringify(SCHEMA_MAP)}
-- DOMAIN_MAPPINGS: ${JSON.stringify(DOMAIN_MAPPINGS)}
+RECURSIVE RANKING PATTERN (REQUIRED for "Top X by Year"):
+1. First CTE: Filter raw data (Dates, Product Keywords, Transaction Types).
+2. Second CTE: Identify Top X IDs based on aggregate sum of the first CTE.
+3. Final SELECT: Join raw data (CTE 1) to Top IDs (CTE 2) and group by YEAR + Name.
 
-STRICT SQL RULES:
-1. DATE COLUMN: Always use 'TransactionDate'. NEVER use 'DateTime' or 'Date'.
-2. PRICE COLUMN: Always use 'RetailPriceExcl'. NEVER use 'Inclusive' or 'TotalAmount'.
-3. QTY: Always 'Qty'.
-4. REVENUE FORMULA: SUM(Qty * RetailPriceExcl).
-5. TABLES: Always use 'dbo.' prefix (e.g., dbo.AUDIT).
-6. ISOLATION: Start every query with 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;'.
+PRODUCT CATEGORY KNOWLEDGE:
+- Enamels: (UPPER(Description) LIKE '%ENAMEL%' OR UPPER(Description) LIKE '%GLOSS%' OR UPPER(Description) LIKE '%EGGSHELL%' OR UPPER(Description) LIKE '%QD%')
+- Paints: (UPPER(Description) LIKE '%PAINT%' OR UPPER(Description) LIKE '%PVA%' OR UPPER(Description) LIKE '%COATING%')
 
-DOMAIN LOGIC:
-- Sale Types: TransactionType 66 (Cash Sale), 70 (Credit Sale), 80 (Layby).
-- Debt Status: Use dbo.DEBTOR.BADMARKER ('F' for Bad Debt).
-- Stock Status: Use dbo.STOCK.STOCKTYPE (13 for Discontinued).
+GOLDEN PATH RULES:
+- ISOLATION: Always start with 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;'
+- JOINS: 'LEFT JOIN dbo.DEBTOR B ON A.DebtorOrCreditorNumber = B.Number'
+- STRINGS: Quote all IDs ('66','70', 'PEG01').
+- CALCULATION: ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)
 
-OUTPUT FORMAT:
-Return valid JSON ONLY: {"sql": "...", "explanation": "...", "visualizationType": "bar|line|area|pie", "xAxis": "col", "yAxis": "col"}.
+OUTPUT: Valid JSON ONLY. {"sql": "...", "explanation": "...", "visualizationType": "bar|line|area|pie", "xAxis": "col", "yAxis": "col"}.
 `;
 };
 
@@ -79,12 +76,15 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   });
   
   const responseText = response.text;
-  if (!responseText) throw new Error("Intelligence link failed: Empty response from AI.");
+  if (!responseText) throw new Error("Intelligence link failed.");
 
   const result = JSON.parse(cleanAiResponse(responseText));
   const { bridgeUrl } = getSettings();
   
-  const finalSql = result.sql.startsWith('SET') ? result.sql : `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${result.sql}`;
+  let finalSql = result.sql;
+  if (!finalSql.toUpperCase().includes('SET TRANSACTION ISOLATION')) {
+    finalSql = `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${finalSql}`;
+  }
 
   const dbResponse = await fetch(`${bridgeUrl}/query`, {
     method: 'POST',
@@ -98,11 +98,11 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     throw new Error(errData.detail || "Bridge Execution Error.");
   }
   
-  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v4.7' };
+  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v6.4' };
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
-  const prompt = `Interpret these Ultisales results: ${JSON.stringify(queryResult.data.slice(0, 10))}. Use Domain Mappings for context. Return JSON.`;
+  const prompt = `Interpret these results: ${JSON.stringify(queryResult.data.slice(0, 10))}. Return JSON.`;
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: prompt,
@@ -110,17 +110,17 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
   });
   
   const responseText = response.text;
-  if (!responseText) throw new Error("Insight generation failed.");
+  if (!responseText) throw new Error("Insight failed.");
 
-  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v4.7' };
+  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v6.4' };
 };
 
 export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. Summarize business health in 2 punchy sentences.`,
+      contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. 2 sentence summary.`,
     });
-    return { text: response.text || "Operational data verified. Strategic streams active.", engine: 'GEMINI FLASH v4.7' };
+    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v6.4' };
   } catch { return null; }
 };

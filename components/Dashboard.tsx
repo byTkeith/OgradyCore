@@ -10,7 +10,8 @@ import { generateStrategicBrief } from '../services/geminiService';
 
 interface DetailedStats {
   salesYoY: any[];
-  topProducts: any[];
+  topAccounts: any[];
+  enamelTrend: any[];
   composition: any[];
   activeDate: string;
   engine: string;
@@ -58,42 +59,61 @@ const Dashboard: React.FC = () => {
       if (isNaN(refDate.getTime())) refDate = new Date();
       const refDateIso = refDate.toISOString().split('T')[0];
 
-      // trailing 30 day revenue sql
+      // Deep Analytics: Top 20 Enamel Buyers yearly for 5 years
+      const enamelTrendSql = `
+        WITH EnamelAudit AS (
+            SELECT A.DebtorOrCreditorNumber, A.RetailPriceExcl, A.Qty, A.LineDiscountPerc, A.TransactionDate, A.Description
+            FROM dbo.AUDIT A
+            WHERE A.TransactionType IN ('66','67','68','70','80','84','100')
+              AND A.TransactionDate >= DATEADD(year, -5, '${refDateIso}')
+              AND (UPPER(A.Description) LIKE '%ENAMEL%' OR UPPER(A.Description) LIKE '%GLOSS%' OR UPPER(A.Description) LIKE '%EGGSHELL%' OR UPPER(A.Description) LIKE '%QD%')
+              AND A.DebtorOrCreditorNumber <> '0'
+        ),
+        CustomerTotals AS (
+            SELECT DebtorOrCreditorNumber, SUM(ROUND(RetailPriceExcl * (1 - ISNULL(LineDiscountPerc, 0) / 100.0) * Qty, 2)) as TotalRev
+            FROM EnamelAudit
+            GROUP BY DebtorOrCreditorNumber
+        ),
+        Top20IDs AS (
+            SELECT TOP 20 DebtorOrCreditorNumber, TotalRev FROM CustomerTotals ORDER BY TotalRev DESC
+        )
+        SELECT 
+            ISNULL(B.Surname, 'Account ' + A.DebtorOrCreditorNumber) as Customer,
+            YEAR(A.TransactionDate) as Year,
+            SUM(ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)) as Revenue,
+            T.TotalRev
+        FROM EnamelAudit A
+        JOIN Top20IDs T ON A.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
+        LEFT JOIN dbo.DEBTOR B ON A.DebtorOrCreditorNumber = B.Number
+        GROUP BY B.Surname, A.DebtorOrCreditorNumber, YEAR(A.TransactionDate), T.TotalRev
+        ORDER BY T.TotalRev DESC, Year DESC`;
+
       const yoySql = `
         SELECT DAY(TransactionDate) as day, 
         SUM(CASE WHEN TransactionDate >= DATEADD(day, -30, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
         SUM(CASE WHEN TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
         FROM dbo.AUDIT 
         WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}'))
-        AND TransactionType IN (66, 67, 68, 70, 80)
+        AND TransactionType IN ('66', '67', '68', '70', '80', '84', '100')
         GROUP BY DAY(TransactionDate)`;
-
-      const topProdSql = `
-        SELECT TOP 10 S.Description, SUM(A.Qty) as sold, MAX(S.OnHand) as stock 
-        FROM dbo.AUDIT A 
-        JOIN dbo.STOCK S ON A.PLUCode = S.Barcode 
-        WHERE A.TransactionDate >= DATEADD(day, -60, '${refDateIso}') 
-        AND A.TransactionType IN (66, 70, 80)
-        GROUP BY S.Description 
-        ORDER BY sold DESC`;
 
       const compSql = `
         SELECT TOP 5 TransactionType, COUNT(*) as value 
         FROM dbo.AUDIT 
         WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
-        AND TransactionType IN (66, 67, 68, 70, 80, 84)
+        AND TransactionType IN ('66', '67', '68', '70', '80', '84', '100')
         GROUP BY TransactionType`;
 
       const kpiSql = `
         SELECT 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as mRev, 
-        (SELECT ISNULL(SUM(Qty * RetailPriceExcl),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as pRev, 
-        (SELECT COUNT(DISTINCT DebtorOrCreditorNumber) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
+        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as mRev, 
+        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as pRev, 
+        (SELECT COUNT(DISTINCT ISNULL(DebtorOrCreditorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
-        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (66, 70, 80)) as ticket`;
+        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN ('66', '67', '70', '80', '84', '100')) as ticket`;
 
-      const [yoy, prod, compRaw, kpi] = await Promise.all([
-        runQuery(yoySql), runQuery(topProdSql), runQuery(compSql), runQuery(kpiSql)
+      const [yoy, enamels, compRaw, kpi] = await Promise.all([
+        runQuery(yoySql), runQuery(enamelTrendSql), runQuery(compSql), runQuery(kpiSql)
       ]);
 
       const composition = compRaw.map((item: any) => ({
@@ -107,10 +127,11 @@ const Dashboard: React.FC = () => {
 
       const newStats: DetailedStats = {
         salesYoY: Array.isArray(yoy) ? yoy.sort((a,b) => a.day - b.day) : [],
-        topProducts: Array.isArray(prod) ? prod : [],
+        topAccounts: [], 
+        enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v4.7',
+        engine: 'SQL_MASTER_v6.4',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -138,7 +159,7 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v4.7 Hyper-Scale Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v6.4 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -149,14 +170,14 @@ const Dashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">VERIFIED v4.7</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v6.4 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
-            Last Transaction Detected: <span className="text-emerald-400">{stats.activeDate}</span>
+            Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
           </p>
         </div>
         <button onClick={fetchBIData} className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 group">
-           {isRefreshing ? "Syncing..." : "Refresh Master Data"} <span className="group-hover:rotate-180 transition-transform duration-500">🔄</span>
+           {isRefreshing ? "Calculating Trends..." : "Refresh Engine"} <span className="group-hover:rotate-180 transition-transform duration-500">🔄</span>
         </button>
       </header>
 
@@ -164,8 +185,8 @@ const Dashboard: React.FC = () => {
         {[
           { label: "Trailing 30D Revenue", val: `R${stats.kpis.totalRevenue.toLocaleString()}`, icon: '💰', color: 'from-emerald-600/30 to-slate-900', text: 'text-emerald-400' },
           { label: "Growth Velocity", val: `${stats.kpis.growthRate > 0 ? '+' : ''}${stats.kpis.growthRate.toFixed(1)}%`, icon: '📈', color: 'from-blue-600/30 to-slate-900', text: 'text-blue-400' },
-          { label: "Inventory Alarms", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'from-rose-600/30 to-slate-900', text: 'text-rose-400' },
-          { label: "Avg Ticket Value", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'from-amber-600/30 to-slate-900', text: 'text-amber-400' }
+          { label: "Stock Alarms", val: stats.kpis.lowStockCount, icon: '⚠️', color: 'from-rose-600/30 to-slate-900', text: 'text-rose-400' },
+          { label: "Avg Sale Value", val: `R${Math.round(stats.kpis.avgTicket)}`, icon: '🛒', color: 'from-amber-600/30 to-slate-900', text: 'text-amber-400' }
         ].map((kpi, i) => (
           <div key={i} className={`bg-slate-900/60 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-emerald-500/50 transition-all backdrop-blur-md`}>
             <div className={`absolute inset-0 bg-gradient-to-br ${kpi.color} opacity-20`}></div>
@@ -181,24 +202,56 @@ const Dashboard: React.FC = () => {
       <div className="bg-slate-900 border border-slate-800 rounded-[3.5rem] p-12 shadow-[0_0_80px_rgba(0,0,0,0.5)] relative overflow-hidden border-l-[12px] border-l-emerald-600">
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-[15rem] font-black">AI</div>
         <div className="flex-1 space-y-6 relative z-10">
-          <h2 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.6em]">Analyst Intelligence Brief</h2>
+          <h2 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.6em]">Executive Analyst Brief</h2>
           <p className="text-slate-100 text-xl md:text-4xl font-bold italic leading-tight max-w-5xl tracking-tight drop-shadow-lg">"{aiBrief}"</p>
-          <div className="flex gap-4 pt-4">
-             <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-slate-400 uppercase">Context: v4.7 Production</span>
-             <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-emerald-400 uppercase">Model: Gemini 3 Flash</span>
-          </div>
         </div>
+      </div>
+
+      {/* Strategic Enamel Insight Table - Enhanced v6.4 */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
+         <div className="flex items-center justify-between mb-12">
+            <div>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter border-l-6 border-blue-500 pl-8">Top 20 Enamel Buyers (5 Year Breakdown)</h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2 ml-8 italic">Verified keyword search: Gloss, Eggshell, QD Enamels</p>
+            </div>
+         </div>
+         <div className="overflow-x-auto">
+           <table className="w-full text-left">
+             <thead>
+               <tr className="border-b border-slate-800">
+                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Customer Profile</th>
+                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fiscal Year</th>
+                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Annual Value</th>
+                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Total (5YR)</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-800/30">
+               {stats.enamelTrend.map((row, i) => {
+                 const isFirstRowOfCustomer = i === 0 || row.Customer !== stats.enamelTrend[i-1].Customer;
+                 return (
+                   <tr key={i} className={`group hover:bg-slate-800/40 transition-all ${isFirstRowOfCustomer ? 'border-t-2 border-slate-800/80' : ''}`}>
+                     <td className={`py-5 text-sm font-bold ${isFirstRowOfCustomer ? 'text-blue-400' : 'text-slate-600/50 italic'}`}>
+                       {isFirstRowOfCustomer ? row.Customer : '↳'}
+                     </td>
+                     <td className="py-5 text-xs font-mono text-slate-400">{row.Year}</td>
+                     <td className="py-5 text-sm font-black text-emerald-400 text-right">R{row.Revenue?.toLocaleString()}</td>
+                     <td className="py-5 text-xs font-black text-slate-500 text-right">
+                        {isFirstRowOfCustomer ? `R${row.TotalRev?.toLocaleString()}` : ''}
+                     </td>
+                   </tr>
+                 );
+               })}
+               {stats.enamelTrend.length === 0 && (
+                 <tr><td colSpan={4} className="py-20 text-center text-slate-600 font-black uppercase text-xs tracking-widest italic opacity-40">Scanning Transaction History...</td></tr>
+               )}
+             </tbody>
+           </table>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
         <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl">
-          <div className="flex items-center justify-between mb-12">
-            <h2 className="text-2xl font-black text-white uppercase tracking-tighter border-l-6 border-emerald-500 pl-8">Fiscal Trajectory</h2>
-            <div className="flex gap-3">
-               <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active</div>
-               <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase"><span className="w-2 h-2 rounded-full bg-slate-700"></span> Prev Year</div>
-            </div>
-          </div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-emerald-500 pl-8">30-Day Fiscal Trajectory</h2>
           <div className="h-[450px]">
             {stats.salesYoY.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -209,24 +262,21 @@ const Dashboard: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="day" stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickMargin={15} />
                   <YAxis stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v) => `R${v}`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px', padding: '20px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
-                    itemStyle={{ color: '#10b981', fontWeight: 800 }}
-                  />
-                  <Area name="Current Month" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={6} />
-                  <Area name="Previous Year" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={3} strokeDasharray="12 12" />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px', padding: '20px' }} />
+                  <Area name="Current" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={6} />
+                  <Area name="Previous" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={3} strokeDasharray="12 12" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
-                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic text-center px-12">No transaction signals in range.</p>
+                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic text-center px-12">Calibrating signals...</p>
               </div>
             )}
           </div>
         </div>
 
         <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-blue-500 pl-8">Transaction Mix (By Mapping)</h2>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-blue-500 pl-8">Transaction Segmentation</h2>
           <div className="w-full h-[450px]">
             {stats.composition.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -240,7 +290,7 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
-                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic opacity-50">Composition Link Pending</p>
+                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic opacity-50">Mapping clusters...</p>
               </div>
             )}
           </div>
