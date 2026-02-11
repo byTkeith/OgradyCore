@@ -1,7 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { DEFAULT_BRIDGE_URL, SALES_TRANSACTION_TYPES } from "../constants";
-import { DOMAIN_MAPPINGS } from "../metadata_mappings";
+import { DEFAULT_BRIDGE_URL, SALES_TRANSACTION_TYPES, SCHEMA_MAP, CORE_TABLES } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -32,37 +31,40 @@ export const initSchema = async (urlOverride?: string): Promise<{ success: boole
 
 const getSystemInstruction = () => {
   const validSalesTypes = SALES_TRANSACTION_TYPES.join("','");
+  
+  // DYNAMICALLY BUILD SCHEMA CONTEXT FROM CONSTANTS.TSX
+  // This ensures the AI only knows about columns that actually exist in your definition.
+  const schemaContext = CORE_TABLES.map(tableName => {
+    const tableDef = SCHEMA_MAP[tableName];
+    if (!tableDef) return "";
+    return `- TABLE **${tableName}** Columns: [${tableDef.fields.join(', ')}]`;
+  }).filter(Boolean).join('\n');
 
   return `
-You are 'OgradyCore AI v7.3', the Principal T-SQL Architect for the UltiSales ERP Database.
-Your directive is to generate syntactically perfect T-SQL queries.
+You are 'OgradyCore AI v7.5', the Principal T-SQL Architect for the UltiSales ERP Database.
+Your directive is to generate syntactically perfect T-SQL queries based EXACTLY on the provided schema.
 
-### 1. CRITICAL SCHEMA RULES (DO NOT HALLUCINATE)
+### 1. STRICT SCHEMA DEFINITION (TIER 1 TABLES)
+You are restricted to using ONLY the following tables and columns. DO NOT Assume other columns exist.
+${schemaContext}
+
+### 2. CRITICAL RULES
 - **DATABASE CONTEXT:** ALWAYS start with \`USE [UltiSales];\` followed by \`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\`
-- **CUSTOMER NAMES:** The \`dbo.DEBTOR\` table uses the column **\`Surname\`**. 
-  - ❌ WRONG: \`SELECT Name FROM dbo.DEBTOR\`
-  - ✅ CORRECT: \`SELECT Surname FROM dbo.DEBTOR\`
+- **CUSTOMER ID:** The \`dbo.AUDIT\` table uses column **\`DebtorNumber\`** to link to customers.
+  - ❌ WRONG: \`DebtorOrCreditorNumber\` (BANNED)
+  - ❌ WRONG: \`ClientCode\` (BANNED)
+  - ✅ CORRECT: \`DebtorNumber\`
+- **CUSTOMER NAMES:** The \`dbo.DEBTOR\` table uses the column **\`Surname\`**.
 - **REVENUE FORMULA:** \`ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2)\`
 
-### 2. TRANSACTION TYPES & THE 'TYPES' TABLE
-The \`dbo.TYPES\` table defines the meaning of codes. 
-To decode \`AUDIT.TransactionType\`, you can join:
-\`\`\`sql
-LEFT JOIN dbo.TYPES T 
-  ON T.TABLE_ID = 3             -- 3 = AUDIT Table
-  AND T.TYPE_NAME_ID = 4        -- 4 = TRANSACTIONTYPE
-  AND T.TYPE_ID = CAST(A.TransactionType AS VARCHAR)
-\`\`\`
+### 3. TRANSACTION TYPES
 - **Sales Filter:** When asked for "Sales" or "Revenue", filter \`TransactionType\` IN ('${validSalesTypes}').
-  - This covers Legacy (1, 10), Modern (66, 70), BOM (84), and Contracts (100).
 
-### 3. REQUIRED PATTERN: "RECURSIVE RANKING"
-For "Top X Customers by Year" requests:
-1. **CTE 1 (RawData):** Filter AUDIT by Date, TransactionType, and Keywords. Calculate LineRevenue.
-2. **CTE 2 (TopEntities):** Group RawData by DebtorOrCreditorNumber to find top X by *Total* Revenue.
-3. **SELECT:** Join RawData -> TopEntities -> DEBTOR. Group by \`D.Surname\`, \`SaleYear\`.
+### 4. REQUIRED PATTERN: "Top Customers"
+1. **CTE:** Filter AUDIT by Date & TransactionType.
+2. **SELECT:** Join CTE -> DEBTOR (ON Audit.DebtorNumber = Debtor.Number). Group by \`D.Surname\`.
 
-### 4. OUTPUT FORMAT
+### 5. OUTPUT FORMAT
 Return ONLY valid JSON:
 {"sql": "...", "explanation": "Brief logic summary", "visualizationType": "bar|line|area", "xAxis": "ColumnName", "yAxis": "ColumnName"}
 `;
@@ -97,7 +99,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   
   let finalSql = result.sql;
   
-  // V7.3: Strict enforcement of Isolation Level and DB Context
+  // V7.5: Strict enforcement of Isolation Level and DB Context
   if (!finalSql.toUpperCase().includes('SET TRANSACTION ISOLATION')) {
     finalSql = `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${finalSql}`;
   }
@@ -118,7 +120,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     throw new Error(errData.detail || "Bridge Execution Error.");
   }
   
-  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v7.3' };
+  return { ...result, data: await dbResponse.json(), engine: 'GEMINI FLASH v7.5' };
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
@@ -132,7 +134,7 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
   const responseText = response.text;
   if (!responseText) throw new Error("Insight failed.");
 
-  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v7.3' };
+  return { ...JSON.parse(cleanAiResponse(responseText)), engine: 'GEMINI FLASH v7.5' };
 };
 
 export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
@@ -141,6 +143,6 @@ export const generateStrategicBrief = async (data: any): Promise<{text: string, 
       model: 'gemini-3-flash-preview',
       contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. 2 sentence summary.`,
     });
-    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.3' };
+    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.5' };
   } catch { return null; }
 };

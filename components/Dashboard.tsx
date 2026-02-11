@@ -5,7 +5,6 @@ import {
   Cell, Legend, PieChart, Pie
 } from 'recharts';
 import { DEFAULT_BRIDGE_URL, MOCK_CHART_COLORS, SALES_TRANSACTION_TYPES } from '../constants';
-import { DOMAIN_MAPPINGS } from '../metadata_mappings';
 import { generateStrategicBrief } from '../services/geminiService';
 
 interface DetailedStats {
@@ -24,32 +23,50 @@ interface DetailedStats {
   };
 }
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  bridgeUrl?: string;
+  isOnline?: boolean;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState<DetailedStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [aiBrief, setAiBrief] = useState("Synchronizing production data streams...");
   const lastFetchRef = useRef<number>(0);
 
   const fetchBIData = useCallback(async () => {
+    // If explicitly offline, don't try to fetch
+    if (!isOnline) {
+       setError("Bridge Offline. Please check connectivity in Data Explorer.");
+       return;
+    }
+
     if (Date.now() - lastFetchRef.current < 2000) return;
     lastFetchRef.current = Date.now();
 
-    const bridgeUrl = localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
+    const currentBridgeUrl = bridgeUrl || localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
     setIsRefreshing(true);
-    const baseUrl = bridgeUrl.replace(/\/$/, "");
+    setError(null);
+    const baseUrl = currentBridgeUrl.replace(/\/$/, "");
 
     const runQuery = async (sql: string) => {
       try {
         const res = await fetch(`${baseUrl}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
-          // V7.3 UPDATE: Explicitly force USE [UltiSales] context
           body: JSON.stringify({ sql: `USE [UltiSales]; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${sql}` }),
           signal: AbortSignal.timeout(20000),
         });
-        if (!res.ok) return [];
+        if (!res.ok) {
+            const errText = await res.text().catch(() => res.statusText);
+            throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
         return await res.json();
-      } catch { return []; }
+      } catch (e: any) { 
+        console.error("Query Error:", e);
+        throw e;
+      }
     };
 
     try {
@@ -64,18 +81,17 @@ const Dashboard: React.FC = () => {
       // Prepare safe string for SQL IN clause using the Expanded Sales Definition
       const salesTypesSql = `'${SALES_TRANSACTION_TYPES.join("','")}'`;
 
-      // 2. Enamel Trends - The "Golden Path" Query
-      // Uses correct column: D.Surname (not Name)
+      // 2. Enamel Trends - Using verified DebtorNumber from Constants
       const enamelTrendSql = `
         WITH RawEnamelData AS (
             SELECT 
-                A.DebtorOrCreditorNumber,
+                A.DebtorNumber,
                 YEAR(A.TransactionDate) AS [SaleYear],
                 ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2) AS [LineRevenue]
             FROM dbo.AUDIT A
             WHERE A.TransactionType IN (${salesTypesSql})
               AND A.TransactionDate >= DATEADD(year, -5, '${refDateIso}')
-              AND A.DebtorOrCreditorNumber <> '0'
+              AND A.DebtorNumber <> '0'
               AND (
                   UPPER(A.Description) LIKE '%ENAMEL%' 
                   OR UPPER(A.Description) LIKE '%GLOSS%' 
@@ -85,23 +101,23 @@ const Dashboard: React.FC = () => {
         ),
         Top20BuyerIDs AS (
             SELECT TOP 20 
-                DebtorOrCreditorNumber, 
+                DebtorNumber, 
                 SUM(LineRevenue) AS [Total5YearSpend]
             FROM RawEnamelData
-            GROUP BY DebtorOrCreditorNumber
+            GROUP BY DebtorNumber
             ORDER BY [Total5YearSpend] DESC
         )
         SELECT 
-            ISNULL(D.Surname, 'Account: ' + R.DebtorOrCreditorNumber) AS [Customer],
+            ISNULL(D.Surname, 'Account: ' + CAST(R.DebtorNumber AS VARCHAR)) AS [Customer],
             R.[SaleYear] AS [Year],
             SUM(R.LineRevenue) AS [Revenue],
             T.Total5YearSpend AS [TotalRev]
         FROM RawEnamelData R
-        JOIN Top20BuyerIDs T ON R.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
-        LEFT JOIN dbo.DEBTOR D ON R.DebtorOrCreditorNumber = D.Number
+        JOIN Top20BuyerIDs T ON R.DebtorNumber = T.DebtorNumber
+        LEFT JOIN dbo.DEBTOR D ON R.DebtorNumber = D.Number
         GROUP BY 
             D.Surname, 
-            R.DebtorOrCreditorNumber, 
+            R.DebtorNumber, 
             R.[SaleYear],
             T.Total5YearSpend
         ORDER BY 
@@ -131,12 +147,12 @@ const Dashboard: React.FC = () => {
         AND A.TransactionType IN (${salesTypesSql})
         GROUP BY T.TYPE_DESCRIPTION, A.TransactionType`;
 
-      // 5. KPIs
+      // 5. KPIs - Using validated DebtorNumber
       const kpiSql = `
         SELECT 
         (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as mRev, 
         (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as pRev, 
-        (SELECT COUNT(DISTINCT ISNULL(DebtorOrCreditorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
+        (SELECT COUNT(DISTINCT ISNULL(DebtorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
         (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as ticket`;
 
@@ -160,7 +176,7 @@ const Dashboard: React.FC = () => {
         enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v7.3',
+        engine: 'SQL_MASTER_v7.6',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -174,12 +190,28 @@ const Dashboard: React.FC = () => {
       const brief = await generateStrategicBrief(newStats);
       if (brief) setAiBrief(brief.text);
 
+    } catch (err: any) {
+        console.error("Dashboard Fetch Error:", err);
+        setError(err.message || "Failed to connect to Intelligence Bridge.");
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [bridgeUrl, isOnline]);
 
   useEffect(() => { fetchBIData(); }, [fetchBIData]);
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-full space-y-8 animate-in fade-in zoom-in duration-500">
+      <div className="w-24 h-24 bg-rose-500/10 rounded-full flex items-center justify-center border border-rose-500/20 shadow-[0_0_50px_rgba(244,63,94,0.2)]">
+        <span className="text-4xl">⚠️</span>
+      </div>
+      <div className="text-center max-w-lg">
+        <h2 className="text-xl font-black text-rose-500 uppercase tracking-widest mb-2">Bridge Connection Failed</h2>
+        <p className="text-sm text-slate-400 font-medium mb-6">{error}</p>
+        <button onClick={fetchBIData} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest rounded-xl transition-all">Retry Connection</button>
+      </div>
+    </div>
+  );
 
   if (!stats) return (
     <div className="flex flex-col items-center justify-center h-full space-y-8 animate-pulse">
@@ -188,7 +220,7 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.3 Intelligence Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.6 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -199,7 +231,7 @@ const Dashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.3 LIVE</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.6 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
             Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
@@ -236,7 +268,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Strategic Enamel Insight Table - Enhanced v7.3 */}
+      {/* Strategic Enamel Insight Table - Enhanced v7.6 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
          <div className="flex items-center justify-between mb-12">
             <div>

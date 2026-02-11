@@ -37,7 +37,7 @@ const App: React.FC = () => {
 
       if (!pingRes || !pingRes.ok) {
         setConnStatus('offline');
-        setLastError("Bridge link timeout. Verify ngrok endpoint.");
+        setLastError("Bridge link timeout. Verify endpoint.");
         return;
       }
 
@@ -71,14 +71,14 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeSection) {
-      case AppSection.DASHBOARD: return <Dashboard />;
+      case AppSection.DASHBOARD: return <Dashboard bridgeUrl={bridgeUrl} isOnline={connStatus === 'online'} />;
       case AppSection.ANALYST_CHAT: return <ChatInterface />;
       case AppSection.DATA_EXPLORER:
         return (
           <div className="p-8 md:p-16 max-w-6xl mx-auto space-y-16 overflow-y-auto h-full pb-32 custom-scrollbar">
             <div className="text-center">
               <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Diagnostic Core</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2 italic">Hybrid Analysis v4.3</p>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2 italic">Hybrid Analysis v4.4</p>
             </div>
 
             <div className="grid md:grid-cols-1 gap-8 max-w-2xl mx-auto">
@@ -153,7 +153,7 @@ const App: React.FC = () => {
             )}
           </div>
         );
-      default: return <Dashboard />;
+      default: return <Dashboard bridgeUrl={bridgeUrl} isOnline={connStatus === 'online'} />;
     }
   };
 
@@ -169,7 +169,7 @@ const App: React.FC = () => {
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">{connStatus === 'online' ? 'Hybrid Protocol Active' : 'Link Offline'}</span>
             </div>
           </div>
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v4.3</span>
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">OgradyCore v4.4</span>
         </header>
         <div className="flex-1 overflow-hidden relative">{renderContent()}</div>
       </main>
