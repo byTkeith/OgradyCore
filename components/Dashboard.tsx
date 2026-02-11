@@ -82,17 +82,17 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
       // Prepare safe string for SQL IN clause using the Expanded Sales Definition
       const salesTypesSql = `'${SALES_TRANSACTION_TYPES.join("','")}'`;
 
-      // 2. Enamel Trends - Using verified DebtorNumber from Constants
+      // 2. Enamel Trends - v7.8 FIX: Updated to DebtorOrCreditorNumber
       const enamelTrendSql = `
         WITH RawEnamelData AS (
             SELECT 
-                A.DebtorNumber,
+                A.DebtorOrCreditorNumber,
                 YEAR(A.TransactionDate) AS [SaleYear],
                 ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2) AS [LineRevenue]
             FROM dbo.AUDIT A
             WHERE A.TransactionType IN (${salesTypesSql})
               AND A.TransactionDate >= DATEADD(year, -5, '${refDateIso}')
-              AND A.DebtorNumber <> '0'
+              AND A.DebtorOrCreditorNumber <> '0'
               AND (
                   UPPER(A.Description) LIKE '%ENAMEL%' 
                   OR UPPER(A.Description) LIKE '%GLOSS%' 
@@ -102,23 +102,23 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         ),
         Top20BuyerIDs AS (
             SELECT TOP 20 
-                DebtorNumber, 
+                DebtorOrCreditorNumber, 
                 SUM(LineRevenue) AS [Total5YearSpend]
             FROM RawEnamelData
-            GROUP BY DebtorNumber
+            GROUP BY DebtorOrCreditorNumber
             ORDER BY [Total5YearSpend] DESC
         )
         SELECT 
-            ISNULL(D.Surname, 'Account: ' + CAST(R.DebtorNumber AS VARCHAR)) AS [Customer],
+            ISNULL(D.Surname, 'Account: ' + CAST(R.DebtorOrCreditorNumber AS VARCHAR)) AS [Customer],
             R.[SaleYear] AS [Year],
             SUM(R.LineRevenue) AS [Revenue],
             T.Total5YearSpend AS [TotalRev]
         FROM RawEnamelData R
-        JOIN Top20BuyerIDs T ON R.DebtorNumber = T.DebtorNumber
-        LEFT JOIN dbo.DEBTOR D ON R.DebtorNumber = D.Number
+        JOIN Top20BuyerIDs T ON R.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
+        LEFT JOIN dbo.DEBTOR D ON R.DebtorOrCreditorNumber = D.Number
         GROUP BY 
             D.Surname, 
-            R.DebtorNumber, 
+            R.DebtorOrCreditorNumber, 
             R.[SaleYear],
             T.Total5YearSpend
         ORDER BY 
@@ -148,12 +148,12 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         AND A.TransactionType IN (${salesTypesSql})
         GROUP BY T.TYPE_DESCRIPTION, A.TransactionType`;
 
-      // 5. KPIs - Using validated DebtorNumber
+      // 5. KPIs - v7.8 FIX: Updated to DebtorOrCreditorNumber
       const kpiSql = `
         SELECT 
         (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as mRev, 
         (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as pRev, 
-        (SELECT COUNT(DISTINCT ISNULL(DebtorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
+        (SELECT COUNT(DISTINCT ISNULL(DebtorOrCreditorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
         (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
         (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as ticket`;
 
@@ -177,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         enamelTrend: Array.isArray(enamels) ? enamels : [],
         composition,
         activeDate: refDateIso,
-        engine: 'SQL_MASTER_v7.7',
+        engine: 'SQL_MASTER_v7.8',
         kpis: {
           totalRevenue: mRev,
           activeCustomers: kpi[0]?.activeCust || 0,
@@ -221,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
       </div>
       <div className="text-center">
         <p className="text-xs font-black text-white uppercase tracking-widest">Bridging Ultisales MSSQL</p>
-        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.7 Intelligence Engine</p>
+        <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest italic">v7.8 Intelligence Engine</p>
       </div>
     </div>
   );
@@ -232,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         <div>
           <div className="flex items-center gap-4 mb-2">
              <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.7 LIVE</span>
+             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v7.8 LIVE</span>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
             Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
@@ -269,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
         </div>
       </div>
 
-      {/* Strategic Enamel Insight Table - Enhanced v7.7 */}
+      {/* Strategic Enamel Insight Table - Enhanced v7.8 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden">
          <div className="flex items-center justify-between mb-12">
             <div>

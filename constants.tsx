@@ -26,8 +26,8 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.AUDIT": {
     description: "Transactional records.",
     primaryKeys: ["ANUMBER", "LineGUID", "HeadGuid", "TransactionDate", "PLUCode", "TransactionType", "SequenceNumber", "ProviderTRNR"],
-    // v7.4 FIX: Changed DebtorOrCreditorNumber to DebtorNumber
-    fields: ["ANUMBER", "Created_Date", "LineGUID", "HeadGuid", "StockType", "OrderDate", "TransactionDate", "PLUCode", "Description", "TransactionType", "CostPriceExcl", "RetailPriceExcl", "Qty", "LineDiscountPerc", "TransactionNumber", "DebtorNumber", "WorkstationNumber", "Operator", "TaxValue", "TaxNumber", "RoundValue", "ShiftNumber", "OrderQty", "PaymentMethod", "Branch", "OnHandAfterTran", "LoyaltyNumber"]
+    // v7.8 FIX: Reverted DebtorNumber to DebtorOrCreditorNumber based on SQL Error 207
+    fields: ["ANUMBER", "Created_Date", "LineGUID", "HeadGuid", "StockType", "OrderDate", "TransactionDate", "PLUCode", "Description", "TransactionType", "CostPriceExcl", "RetailPriceExcl", "Qty", "LineDiscountPerc", "TransactionNumber", "DebtorOrCreditorNumber", "WorkstationNumber", "Operator", "TaxValue", "TaxNumber", "RoundValue", "ShiftNumber", "OrderQty", "PaymentMethod", "Branch", "OnHandAfterTran", "LoyaltyNumber"]
   },
   "dbo.STOCK": {
     description: "Inventory Master.",
@@ -46,6 +46,9 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
     primaryKeys: ["ANUMBER", "KredGUID", "Number"],
     fields: ["ANUMBER", "Status", "KredGUID", "Number", "Name", "TelephoneNumber", "MaxCreditLimit", "ContactPerson", "EmailAddress", "KredAccStatus"]
   },
+  "dbo.TRANSACTIONS": { 
+    primaryKeys: ["ANUMBER", "GUID"], 
+    fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
   // --- EXTENDED SCHEMA (Tier 2) ---
   "dbo.AUDIT_CREDITOR": { primaryKeys: ["ANUMBER", "OuLineGuid", "OuHeadGuid"], fields: ["ANUMBER", "OuLineGuid", "OuHeadGuid", "Number", "Description", "TransactionType", "Name", "PostalCode", "TelephoneNumber"] },
   "dbo.AUDIT_DEBTOR": { primaryKeys: ["ANUMBER", "OuLineGuid", "OuHeadGuid"], fields: ["ANUMBER", "OuLineGuid", "OuHeadGuid", "Number", "Description", "TransactionType", "Surname", "MaxCreditLimit", "AccountType"] },
@@ -79,7 +82,7 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.STOCK_MULTI_PLU": { primaryKeys: ["ANUMBER", "PLUCode", "MainStockCode"], fields: ["ANUMBER", "PLUCode", "MainStockCode", "GRVNumber", "InvoiceNumber"] },
   "dbo.STOCK_PRODUCTION": { primaryKeys: ["ANUMBER", "GUID", "Barcode"], fields: ["ANUMBER", "Barcode", "Description", "OnHand", "CostPriceExcl"] },
   "dbo.STOCK_SUPPLIER": { primaryKeys: ["ANUMBER", "Supplier", "PLUCode"], fields: ["ANUMBER", "Supplier", "PLUCode", "CostPriceExcl", "GRVNumber", "LeadTimeDays"] },
-  "dbo.TRANSACTIONS": { primaryKeys: ["ANUMBER", "GUID"], fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
+  //"dbo.TRANSACTIONS": { primaryKeys: ["ANUMBER", "GUID"], fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
   "dbo.TRN_AUDIT": { primaryKeys: ["SEQDate", "ANUMBER", "TransactionDate"], fields: ["ANUMBER", "TransactionDate", "PLUCode", "Description", "Qty", "RetailPriceExcl"] }
 };
 
