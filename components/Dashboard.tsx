@@ -1,427 +1,106 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  Cell, Legend, PieChart, Pie
-} from 'recharts';
-import { DEFAULT_BRIDGE_URL, MOCK_CHART_COLORS, SALES_TRANSACTION_TYPES } from '../constants';
-import { generateStrategicBrief } from '../services/geminiService';
-
-interface DetailedStats {
-  salesYoY: any[];
-  topAccounts: any[];
-  enamelTrend: any[];
-  composition: any[];
-  activeDate: string;
-  engine: string;
-  kpis: {
-    totalRevenue: number;
-    activeCustomers: number;
-    lowStockCount: number;
-    avgTicket: number;
-    growthRate: number;
-  };
-}
+import React, { useState, useEffect, useCallback } from 'react';
+import { DEFAULT_BRIDGE_URL } from '../constants';
+import { AppSection } from '../types';
 
 interface DashboardProps {
   bridgeUrl?: string;
   isOnline?: boolean;
 }
 
-// Priority Queue Item Definition
-interface QueueItem {
-  id: string;
-  priority: number; // Lower is higher priority (Shortest Job First)
-  sql: string;
-  type: 'kpi' | 'chart' | 'table';
-}
-
 const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  // Initial state is partial to allow progressive loading
-  const [stats, setStats] = useState<Partial<DetailedStats>>({
-    kpis: { totalRevenue: 0, activeCustomers: 0, lowStockCount: 0, avgTicket: 0, growthRate: 0 },
-    salesYoY: [],
-    composition: [],
-    enamelTrend: [],
-    activeDate: "Scanning...",
-    engine: 'INIT'
-  });
-  
-  const [loadingStates, setLoadingStates] = useState({
-    kpis: false,
-    charts: false,
-    tables: false
-  });
+  const [latency, setLatency] = useState<number | null>(null);
+  const [dbName, setDbName] = useState<string>('Unknown');
+  const [lastCheck, setLastCheck] = useState<string>(new Date().toLocaleTimeString());
 
-  const [error, setError] = useState<string | null>(null);
-  const [aiBrief, setAiBrief] = useState("Initializing Priority Queue...");
-  const lastFetchRef = useRef<number>(0);
-
-  const fetchBIData = useCallback(async () => {
-    // If explicitly offline, don't try to fetch
-    if (!isOnline) {
-       setError("Bridge Offline. Please check connectivity in Data Explorer.");
-       return;
-    }
-
-    // Debounce
-    if (Date.now() - lastFetchRef.current < 2000) return;
-    lastFetchRef.current = Date.now();
-
-    const currentBridgeUrl = bridgeUrl || localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL;
-    setIsRefreshing(true);
-    setError(null);
-    setLoadingStates({ kpis: true, charts: true, tables: true });
-    
-    const baseUrl = currentBridgeUrl.replace(/\/$/, "");
-
-    // Generic Query Runner
-    const runQuery = async (sql: string) => {
-      try {
-        const res = await fetch(`${baseUrl}/query`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420' },
-          body: JSON.stringify({ sql: `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; ${sql}` }),
-          signal: AbortSignal.timeout(60000), // 60s timeout
-        });
-        if (!res.ok) {
-            const errText = await res.text().catch(() => res.statusText);
-            throw new Error(`HTTP ${res.status}: ${errText}`);
-        }
-        return await res.json();
-      } catch (e: any) { 
-        console.error("Query Error:", e);
-        throw e;
-      }
-    };
-
+  const checkHealth = useCallback(async () => {
+    if (!bridgeUrl) return;
+    const start = Date.now();
     try {
-      // 1. CRITICAL: Get Base Reference Date (Database "Today")
-      // We must align the dashboard "Today" with the actual data, otherwise charts are blank.
-      let refDateIso = new Date().toISOString().split('T')[0];
-      try {
-          const latestDateRes = await runQuery(`SELECT MAX(TransactionDate) as lastDate FROM dbo.AUDIT`);
-          const lastDateStr = latestDateRes?.[0]?.lastDate;
-          if (lastDateStr) {
-             refDateIso = new Date(lastDateStr).toISOString().split('T')[0];
-          }
-      } catch (e) { 
-        console.warn("Date fetch failed, falling back to system date", e); 
-      }
-
-      setStats(prev => ({ ...prev, activeDate: refDateIso }));
-      const salesTypesSql = `'${SALES_TRANSACTION_TYPES.join("','")}'`;
-
-      // ---------------------------------------------------------
-      // DEFINING THE PRIORITY QUEUE (Shortest Job First Strategy)
-      // ---------------------------------------------------------
+      const baseUrl = bridgeUrl.replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/health`, {
+        headers: { 'ngrok-skip-browser-warning': '69420' },
+        signal: AbortSignal.timeout(5000)
+      });
+      const data = await res.json();
+      const end = Date.now();
       
-      // PRIORITY 1: KPIs (Fastest execution, high value)
-      const kpiSql = `
-        SELECT 
-        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as mRev, 
-        (SELECT ISNULL(SUM(ROUND(Qty * RetailPriceExcl, 2)),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as pRev, 
-        (SELECT COUNT(DISTINCT ISNULL(DebtorOrCreditorNumber, '0')) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}')) as activeCust, 
-        (SELECT COUNT(*) FROM dbo.STOCK WHERE OnHand <= 5) as lowStock, 
-        (SELECT ISNULL(AVG(RetailPriceExcl * Qty),0) FROM dbo.AUDIT WHERE TransactionDate >= DATEADD(day, -30, '${refDateIso}') AND TransactionType IN (${salesTypesSql})) as ticket`;
-
-      // PRIORITY 2: Composition Pie Chart (Medium speed, single grouping)
-      const compSql = `
-        SELECT TOP 5 
-            ISNULL(T.TYPE_DESCRIPTION, 'Type ' + CAST(A.TransactionType AS VARCHAR)) as label,
-            COUNT(*) as value 
-        FROM dbo.AUDIT A
-        LEFT JOIN dbo.TYPES T ON T.TABLE_ID = 3 AND T.TYPE_NAME_ID = 4 AND T.TYPE_ID = CAST(A.TransactionType AS VARCHAR)
-        WHERE A.TransactionDate >= DATEADD(day, -30, '${refDateIso}') 
-        AND A.TransactionType IN (${salesTypesSql})
-        GROUP BY T.TYPE_DESCRIPTION, A.TransactionType`;
-
-      // PRIORITY 3: YoY Trends (Medium/Slow, date grouping)
-      const yoySql = `
-        SELECT DAY(TransactionDate) as day, 
-        SUM(CASE WHEN TransactionDate >= DATEADD(day, -30, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as currentYear, 
-        SUM(CASE WHEN TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}')) AND TransactionDate <= DATEADD(year, -1, '${refDateIso}') THEN (Qty * RetailPriceExcl) ELSE 0 END) as lastYear 
-        FROM dbo.AUDIT 
-        WHERE TransactionDate >= DATEADD(year, -1, DATEADD(day, -30, '${refDateIso}'))
-        AND TransactionType IN (${salesTypesSql})
-        GROUP BY DAY(TransactionDate)`;
-
-      // PRIORITY 4: Enamel Trends (Slowest, complex joins/strings)
-      // Optimized: Reduced lookback window to 3 years to prevent timeout on large DBs
-      const enamelTrendSql = `
-        WITH RawEnamelData AS (
-            SELECT 
-                A.DebtorOrCreditorNumber,
-                YEAR(A.TransactionDate) AS [SaleYear],
-                ROUND(A.RetailPriceExcl * (1 - ISNULL(A.LineDiscountPerc, 0) / 100.0) * A.Qty, 2) AS [LineRevenue]
-            FROM dbo.AUDIT A
-            WHERE A.TransactionType IN (${salesTypesSql})
-              AND A.TransactionDate >= DATEADD(year, -3, '${refDateIso}') 
-              AND A.DebtorOrCreditorNumber <> '0'
-              AND (
-                  A.Description LIKE '%ENAMEL%' 
-                  OR A.Description LIKE '%GLOSS%' 
-              )
-        ),
-        Top20BuyerIDs AS (
-            SELECT TOP 20 
-                DebtorOrCreditorNumber, 
-                SUM(LineRevenue) AS [Total5YearSpend]
-            FROM RawEnamelData
-            GROUP BY DebtorOrCreditorNumber
-            ORDER BY [Total5YearSpend] DESC
-        )
-        SELECT 
-            ISNULL(D.Surname, 'Account: ' + CAST(R.DebtorOrCreditorNumber AS VARCHAR)) AS [Customer],
-            R.[SaleYear] AS [Year],
-            SUM(R.LineRevenue) AS [Revenue],
-            T.Total5YearSpend AS [TotalRev]
-        FROM RawEnamelData R
-        JOIN Top20BuyerIDs T ON R.DebtorOrCreditorNumber = T.DebtorOrCreditorNumber
-        LEFT JOIN dbo.DEBTOR D ON R.DebtorOrCreditorNumber = D.Number
-        GROUP BY 
-            D.Surname, 
-            R.DebtorOrCreditorNumber, 
-            R.[SaleYear],
-            T.Total5YearSpend
-        ORDER BY 
-            T.Total5YearSpend DESC, 
-            [Customer] ASC, 
-            [Year] DESC;
-      `;
-
-      // Build Queue
-      const queue: QueueItem[] = [
-        { id: 'kpi', priority: 1, sql: kpiSql, type: 'kpi' },
-        { id: 'comp', priority: 2, sql: compSql, type: 'chart' },
-        { id: 'yoy', priority: 3, sql: yoySql, type: 'chart' },
-        { id: 'enamel', priority: 4, sql: enamelTrendSql, type: 'table' }
-      ];
-
-      // Sort by Shortest Job First
-      queue.sort((a, b) => a.priority - b.priority);
-
-      setAiBrief("Processing Priority Queue...");
-
-      // Execute Queue Sequentially to prevent Bridge Overload
-      for (const task of queue) {
-        try {
-          const data = await runQuery(task.sql);
-          
-          // Progressive State Update
-          setStats(prev => {
-            const next = { ...prev };
-            
-            if (task.id === 'kpi') {
-               const kpiRow = data?.[0] || {};
-               const mRev = kpiRow.mRev || 0;
-               const pRev = kpiRow.pRev || 1;
-               const growth = ((mRev - pRev) / pRev) * 100;
-               
-               next.kpis = {
-                 totalRevenue: mRev,
-                 activeCustomers: kpiRow.activeCust || 0,
-                 lowStockCount: kpiRow.lowStock || 0,
-                 avgTicket: kpiRow.ticket || 0,
-                 growthRate: isFinite(growth) ? growth : 0
-               };
-               // Trigger AI brief generation after KPIs
-               generateStrategicBrief(next).then(res => {
-                  if (res) setAiBrief(res.text);
-               });
-               setLoadingStates(l => ({ ...l, kpis: false }));
-            }
-            else if (task.id === 'comp') {
-                next.composition = Array.isArray(data) ? data
-                  .filter((item: any) => item && item.label && item.value)
-                  .map((item: any) => ({ label: item.label, value: item.value })) 
-                  : [];
-            }
-            else if (task.id === 'yoy') {
-                next.salesYoY = Array.isArray(data) ? data.sort((a: any, b: any) => a.day - b.day) : [];
-                setLoadingStates(l => ({ ...l, charts: false }));
-            }
-            else if (task.id === 'enamel') {
-                next.enamelTrend = Array.isArray(data) ? data : [];
-                setLoadingStates(l => ({ ...l, tables: false }));
-            }
-
-            return next;
-          });
-
-        } catch (taskErr) {
-          console.error(`Queue Task Failed [${task.id}]:`, taskErr);
-          // Don't crash the whole dashboard if one non-critical widget fails
-          if (task.type === 'table') setLoadingStates(l => ({ ...l, tables: false }));
-          if (task.type === 'chart') setLoadingStates(l => ({ ...l, charts: false }));
-        }
+      if (res.ok && data.status === 'online') {
+        setLatency(end - start);
+        setDbName('UltiSales (MSSQL)');
+        setLastCheck(new Date().toLocaleTimeString());
       }
-
-      setStats(prev => ({ ...prev, engine: 'SJF_QUEUE_v8.1' }));
-
-    } catch (err: any) {
-        console.error("Dashboard Fetch Error:", err);
-        setError(err.message || "Failed to connect to Intelligence Bridge.");
-    } finally {
-      setIsRefreshing(false);
-      setLoadingStates({ kpis: false, charts: false, tables: false });
+    } catch (e) {
+      setLatency(null);
     }
-  }, [bridgeUrl, isOnline]);
+  }, [bridgeUrl]);
 
-  useEffect(() => { fetchBIData(); }, [fetchBIData]);
-
-  if (error) return (
-    <div className="flex flex-col items-center justify-center h-full space-y-8 animate-in fade-in zoom-in duration-500">
-      <div className="w-24 h-24 bg-rose-500/10 rounded-full flex items-center justify-center border border-rose-500/20 shadow-[0_0_50px_rgba(244,63,94,0.2)]">
-        <span className="text-4xl">⚠️</span>
-      </div>
-      <div className="text-center max-w-lg">
-        <h2 className="text-xl font-black text-rose-500 uppercase tracking-widest mb-2">Bridge Connection Failed</h2>
-        <p className="text-sm text-slate-400 font-medium mb-6">{error}</p>
-        <button onClick={fetchBIData} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest rounded-xl transition-all">Retry Connection</button>
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000); // Only ping every 30s
+    return () => clearInterval(interval);
+  }, [checkHealth]);
 
   return (
-    <div className="p-4 md:p-10 max-w-[1600px] mx-auto space-y-10 overflow-y-auto h-full pb-32 custom-scrollbar">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800 pb-10">
-        <div>
-          <div className="flex items-center gap-4 mb-2">
-             <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">Executive <span className="text-emerald-500 drop-shadow-[0_0_20px_rgba(16,185,129,0.4)]">BI Suite</span></h1>
-             <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-500 uppercase tracking-widest">v8.1 SJF QUEUE</span>
-          </div>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.5em] mt-3">
-            Active Pulse: <span className="text-emerald-400">{stats.activeDate}</span>
-          </p>
-        </div>
-        <button onClick={fetchBIData} className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 group">
-           {isRefreshing ? "Processing Queue..." : "Refresh Engine"} <span className="group-hover:rotate-180 transition-transform duration-500">🔄</span>
-        </button>
-      </header>
+    <div className="flex flex-col items-center justify-center h-full p-6 space-y-12">
+      <div className="text-center space-y-4">
+        <h1 className="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter">
+          Ogrady<span className="text-emerald-500">Core</span>
+        </h1>
+        <p className="text-sm text-slate-500 font-bold uppercase tracking-[0.5em]">
+          Intelligence Bridge v8.2
+        </p>
+      </div>
 
-      {/* KPIs Section */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-        {[
-          { label: "Trailing 30D Revenue", val: `R${stats.kpis?.totalRevenue?.toLocaleString() ?? 0}`, icon: '💰', color: 'from-emerald-600/30 to-slate-900', text: 'text-emerald-400' },
-          { label: "Growth Velocity", val: `${(stats.kpis?.growthRate ?? 0) > 0 ? '+' : ''}${(stats.kpis?.growthRate ?? 0).toFixed(1)}%`, icon: '📈', color: 'from-blue-600/30 to-slate-900', text: 'text-blue-400' },
-          { label: "Stock Alarms", val: stats.kpis?.lowStockCount ?? 0, icon: '⚠️', color: 'from-rose-600/30 to-slate-900', text: 'text-rose-400' },
-          { label: "Avg Sale Value", val: `R${Math.round(stats.kpis?.avgTicket ?? 0)}`, icon: '🛒', color: 'from-amber-600/30 to-slate-900', text: 'text-amber-400' }
-        ].map((kpi, i) => (
-          <div key={i} className={`bg-slate-900/60 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-emerald-500/50 transition-all backdrop-blur-md`}>
-             {loadingStates.kpis && <div className="absolute inset-0 bg-slate-950/80 z-20 flex items-center justify-center backdrop-blur-sm"><div className="w-6 h-6 border-2 border-emerald-500 rounded-full animate-spin border-t-transparent"></div></div>}
-            <div className={`absolute inset-0 bg-gradient-to-br ${kpi.color} opacity-20`}></div>
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 relative z-10">{kpi.label}</span>
-            <div className="flex items-center justify-between relative z-10">
-              <h3 className={`text-2xl md:text-4xl font-black ${kpi.text}`}>{kpi.val}</h3>
-              <span className="text-4xl opacity-30 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-300">{kpi.icon}</span>
+      {/* Status Card */}
+      <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl w-full max-w-2xl relative overflow-hidden group">
+        <div className={`absolute inset-0 opacity-10 transition-colors duration-500 ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-6">
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 shadow-xl transition-colors duration-500 ${
+              isOnline ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500' : 'border-rose-500 bg-rose-500/10 text-rose-500'
+            }`}>
+              <span className="text-3xl">{isOnline ? '⚡' : '⛔'}</span>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-[3.5rem] p-12 shadow-[0_0_80px_rgba(0,0,0,0.5)] relative overflow-hidden border-l-[12px] border-l-emerald-600">
-        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-[15rem] font-black">AI</div>
-        <div className="flex-1 space-y-6 relative z-10">
-          <h2 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.6em]">Executive Analyst Brief</h2>
-          <p className="text-slate-100 text-xl md:text-4xl font-bold italic leading-tight max-w-5xl tracking-tight drop-shadow-lg">"{aiBrief}"</p>
-        </div>
-      </div>
-
-      {/* Strategic Enamel Insight Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl overflow-hidden relative min-h-[300px]">
-         {loadingStates.tables && <div className="absolute inset-0 bg-slate-950/60 z-20 flex items-center justify-center backdrop-blur-sm"><p className="text-emerald-500 font-black uppercase tracking-widest animate-pulse">Running Heavy Query (SJF Priority 4)...</p></div>}
-         <div className="flex items-center justify-between mb-12">
             <div>
-              <h2 className="text-2xl font-black text-white uppercase tracking-tighter border-l-6 border-blue-500 pl-8">Top 20 Enamel Buyers (3 Year Breakdown)</h2>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2 ml-8 italic">Verified keyword search: Gloss, Enamels</p>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+                {isOnline ? 'System Active' : 'System Offline'}
+              </h2>
+              <p className="text-xs text-slate-400 font-mono mt-1">
+                {isOnline ? `Connected to ${dbName}` : 'Bridge connection failed'}
+              </p>
             </div>
-         </div>
-         <div className="overflow-x-auto">
-           <table className="w-full text-left">
-             <thead>
-               <tr className="border-b border-slate-800">
-                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Customer Profile</th>
-                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fiscal Year</th>
-                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Annual Value</th>
-                 <th className="pb-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Total (3YR)</th>
-               </tr>
-             </thead>
-             <tbody className="divide-y divide-slate-800/30">
-               {(stats.enamelTrend || []).map((row: any, i: number) => {
-                 const prevRow = stats.enamelTrend ? stats.enamelTrend[i-1] : null;
-                 const isFirstRowOfCustomer = i === 0 || (prevRow && row.Customer !== prevRow.Customer);
-                 return (
-                   <tr key={i} className={`group hover:bg-slate-800/40 transition-all ${isFirstRowOfCustomer ? 'border-t-2 border-slate-800/80' : ''}`}>
-                     <td className={`py-5 text-sm font-bold ${isFirstRowOfCustomer ? 'text-blue-400' : 'text-slate-600/50 italic'}`}>
-                       {isFirstRowOfCustomer ? row.Customer : '↳'}
-                     </td>
-                     <td className="py-5 text-xs font-mono text-slate-400">{row.Year}</td>
-                     <td className="py-5 text-sm font-black text-emerald-400 text-right">R{row.Revenue?.toLocaleString()}</td>
-                     <td className="py-5 text-xs font-black text-slate-500 text-right">
-                        {isFirstRowOfCustomer ? `R${row.TotalRev?.toLocaleString()}` : ''}
-                     </td>
-                   </tr>
-                 );
-               })}
-               {(!stats.enamelTrend || stats.enamelTrend.length === 0) && !loadingStates.tables && (
-                 <tr><td colSpan={4} className="py-20 text-center text-slate-600 font-black uppercase text-xs tracking-widest italic opacity-40">Queue Empty / No Data Found</td></tr>
-               )}
-             </tbody>
-           </table>
-         </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl relative">
-          {loadingStates.charts && <div className="absolute inset-0 bg-slate-950/60 z-20 flex items-center justify-center backdrop-blur-sm rounded-[4rem]"><div className="w-8 h-8 border-4 border-emerald-500 rounded-full animate-spin border-t-transparent"></div></div>}
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-emerald-500 pl-8">30-Day Fiscal Trajectory</h2>
-          <div className="h-[450px]">
-            {(stats.salesYoY || []).length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.salesYoY}>
-                  <defs>
-                    <linearGradient id="gCurr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.7}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="day" stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickMargin={15} />
-                  <YAxis stroke="#475569" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v) => `R${v}`} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px', padding: '20px' }} />
-                  <Area name="Current" type="monotone" dataKey="currentYear" stroke="#10b981" fill="url(#gCurr)" strokeWidth={6} />
-                  <Area name="Previous" type="monotone" dataKey="lastYear" stroke="#334155" fill="transparent" strokeWidth={3} strokeDasharray="12 12" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
-                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic text-center px-12">Calibrating signals...</p>
-              </div>
-            )}
           </div>
-        </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-[4rem] p-12 shadow-2xl backdrop-blur-2xl relative">
-          {loadingStates.charts && <div className="absolute inset-0 bg-slate-950/60 z-20 flex items-center justify-center backdrop-blur-sm rounded-[4rem]"><div className="w-8 h-8 border-4 border-emerald-500 rounded-full animate-spin border-t-transparent"></div></div>}
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-12 border-l-6 border-blue-500 pl-8">Transaction Segmentation</h2>
-          <div className="w-full h-[450px]">
-            {(stats.composition || []).length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stats.composition} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={120} outerRadius={170} paddingAngle={12} cornerRadius={12}>
-                    {(stats.composition || []).map((_: any, index: number) => (<Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} strokeWidth={0} />))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '32px' }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', color: '#94a3b8', paddingTop: '40px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[3rem]">
-                <p className="text-slate-600 text-sm font-black uppercase tracking-[0.2em] italic opacity-50">Mapping clusters...</p>
-              </div>
-            )}
+          <div className="text-right space-y-2">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-black/40 rounded-xl border border-slate-700/50">
+              <span className="text-[10px] text-slate-500 font-bold uppercase">Latency</span>
+              <span className={`text-sm font-mono font-bold ${latency && latency < 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {latency ? `${latency}ms` : '---'}
+              </span>
+            </div>
+            <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+              Last Ping: {lastCheck}
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Action Area */}
+      {isOnline && (
+        <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+           <p className="text-center text-slate-500 text-xs mb-6 font-medium italic">
+             Visualizations disabled to prioritize Analyst Bandwidth.
+           </p>
+           {/* Note: This is just a visual indicator, the user navigates via Sidebar */}
+           <div className="flex gap-4 opacity-50 pointer-events-none">
+              <div className="h-32 w-32 rounded-2xl border border-slate-800 bg-slate-900/50"></div>
+              <div className="h-32 w-32 rounded-2xl border border-slate-800 bg-slate-900/50"></div>
+              <div className="h-32 w-32 rounded-2xl border border-slate-800 bg-slate-900/50"></div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

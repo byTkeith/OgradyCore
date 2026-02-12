@@ -9,24 +9,15 @@ const getSettings = () => ({
   bridgeUrl: (localStorage.getItem('og_bridge_url') || DEFAULT_BRIDGE_URL).replace(/\/$/, "")
 });
 
+// v8.2: Hard-coded schema initialization to save network requests
 export const initSchema = async (urlOverride?: string): Promise<{ success: boolean; data: Record<string, string[]>; error?: string }> => {
-  const currentBridgeUrl = urlOverride || getSettings().bridgeUrl;
-  const targetUrl = currentBridgeUrl.replace(/\/$/, "");
-  
-  try {
-    const res = await fetch(`${targetUrl}/inspect`, { 
-      headers: { 'ngrok-skip-browser-warning': '69420' },
-      signal: AbortSignal.timeout(15000)
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      return { success: true, data };
-    }
-    return { success: true, data: {}, error: "Link busy." };
-  } catch {
-    return { success: true, data: {}, error: "Link high latency." };
-  }
+  // We simply return the local constant data masquerading as a fetch result.
+  // This saves the backend from running a heavy sys.columns query.
+  const staticData: Record<string, string[]> = {};
+  Object.keys(SCHEMA_MAP).forEach(key => {
+    staticData[key] = SCHEMA_MAP[key].fields;
+  });
+  return Promise.resolve({ success: true, data: staticData });
 };
 
 const getSystemInstruction = () => {
@@ -132,11 +123,6 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
 };
 
 export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `KPI Analysis: ${JSON.stringify(data.kpis)}. 2 sentence summary.`,
-    });
-    return { text: response.text || "Data verified.", engine: 'GEMINI FLASH v7.5' };
-  } catch { return null; }
+  // Disabled for Lite Version
+  return null;
 };
