@@ -5,6 +5,48 @@ import { QueryResult, AnalystInsight } from '../types';
 import Visualizer from './Visualizer';
 import InsightPanel from './InsightPanel';
 
+const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({ data, xAxis, yAxis }) => {
+  if (!data || data.length === 0) return null;
+  
+  // Format numbers nicely
+  const formatVal = (val: any) => {
+    if (typeof val === 'number') return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return val;
+  };
+
+  return (
+    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden mb-6">
+      <div className="bg-slate-900/60 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Statistical Summary</span>
+        <span className="text-[9px] text-slate-500 font-mono">{data.length} records found</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="bg-black/20 text-slate-500 font-black uppercase tracking-tighter">
+              <th className="px-4 py-2">{xAxis}</th>
+              <th className="px-4 py-2 text-right">{yAxis}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {data.slice(0, 10).map((row, i) => (
+              <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
+                <td className="px-4 py-2 text-slate-300 font-medium">{row[xAxis] || 'Unknown'}</td>
+                <td className="px-4 py-2 text-right text-emerald-400 font-mono font-bold">{formatVal(row[yAxis])}</td>
+              </tr>
+            ))}
+            {data.length > 10 && (
+              <tr>
+                <td colSpan={2} className="px-4 py-1 text-center text-[9px] text-slate-600 italic">Showing top 10 of {data.length} results</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const ChatInterface: React.FC = () => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +71,6 @@ const ChatInterface: React.FC = () => {
 
     try {
       const pipelineResult = await analyzeQuery(currentQuery);
-      
       setResults(prev => [...prev, { 
         query: currentQuery, 
         result: pipelineResult, 
@@ -49,7 +90,7 @@ const ChatInterface: React.FC = () => {
       <div className="flex items-center justify-between px-4 mb-4">
         <div>
           <h2 className="text-xl font-black text-white uppercase tracking-tighter">Executive Analyst</h2>
-          <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">High-Performance Llama 3.1 Pipeline</p>
+          <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">High-Performance Business Engine</p>
         </div>
       </div>
 
@@ -60,9 +101,9 @@ const ChatInterface: React.FC = () => {
               <span className="text-4xl">🚀</span>
             </div>
             <div className="max-w-md">
-              <p className="text-2xl font-black text-white uppercase tracking-tight">Real-time BI Active</p>
+              <p className="text-2xl font-black text-white uppercase tracking-tight">Strategy Mode Active</p>
               <p className="text-slate-500 mt-4 text-sm font-medium leading-relaxed italic border-t border-slate-800 pt-4">
-                "Show me top 10 selling products this month"
+                "Compare sales of enamels vs gloss for the last 6 months"
               </p>
             </div>
           </div>
@@ -94,10 +135,18 @@ const ChatInterface: React.FC = () => {
                 <div className={`absolute top-0 right-10 -translate-y-1/2 px-4 py-1 rounded-full border text-[9px] font-black uppercase bg-emerald-500/20 border-emerald-500 text-emerald-400`}>
                   {item.engine}
                 </div>
-                <code className="text-[12px] block bg-black/40 p-6 rounded-2xl text-emerald-400 overflow-x-auto mb-6 font-mono border border-slate-800">{item.result.sql}</code>
-                <p className="text-sm text-slate-300 italic font-medium">Analysis: {item.result.explanation}</p>
+                <div className="mb-4">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">T-SQL Blueprint</h4>
+                    <code className="text-[12px] block bg-black/40 p-6 rounded-2xl text-emerald-400 overflow-x-auto font-mono border border-slate-800">{item.result.sql}</code>
+                </div>
+                <p className="text-sm text-slate-300 italic font-medium mt-4 border-l-2 border-emerald-500 pl-4">Logical Path: {item.result.explanation}</p>
               </div>
-              <Visualizer result={item.result} />
+
+              <div className="grid lg:grid-cols-1 gap-6">
+                <SummaryTable data={item.result.data} xAxis={item.result.xAxis} yAxis={item.result.yAxis} />
+                <Visualizer result={item.result} />
+              </div>
+              
               <InsightPanel insight={item.insight} />
             </div>
           </div>
@@ -107,7 +156,7 @@ const ChatInterface: React.FC = () => {
           <div className="flex flex-col gap-6 animate-pulse md:ml-12">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
-              <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Querying Neural Bridge...</p>
+              <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Crunching Strategic Data...</p>
             </div>
             <div className="h-24 bg-slate-900/50 rounded-[2rem] w-full border border-slate-800"></div>
             <div className="h-[300px] bg-slate-900/50 rounded-[2rem] w-full border border-slate-800"></div>
@@ -121,7 +170,7 @@ const ChatInterface: React.FC = () => {
             type="text" 
             value={query} 
             onChange={(e) => setQuery(e.target.value)} 
-            placeholder="Ask anything about your business data..." 
+            placeholder="What's our biggest revenue driver this week?" 
             className="w-full bg-slate-900 border border-slate-800 text-white pl-8 pr-32 py-5 rounded-[2rem] focus:outline-none focus:border-emerald-600 transition-all font-medium text-lg" 
           />
           <button 
@@ -129,7 +178,7 @@ const ChatInterface: React.FC = () => {
             disabled={isLoading || !query.trim()} 
             className="absolute right-2 top-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-8 py-3.5 rounded-full transition-all font-black text-[10px] uppercase tracking-widest shadow-xl"
           >
-            {isLoading ? 'WORKING...' : 'ANALYZE'}
+            {isLoading ? 'ANALYZING...' : 'COMMAND'}
           </button>
         </form>
       </div>
