@@ -10,9 +10,6 @@ const getSettings = () => {
 
 export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string, insight: AnalystInsight }> => {
   const { bridgeUrl } = getSettings();
-  
-  // If bridgeUrl is empty, it uses relative '/api/analyze' (for single-server mode)
-  // If it's an ngrok URL, it uses that.
   const endpoint = bridgeUrl ? `${bridgeUrl}/api/analyze` : '/api/analyze';
   
   try {
@@ -20,16 +17,17 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true', // Essential for ngrok tunnels
+        'ngrok-skip-browser-warning': 'true',
         'Accept': 'application/json'
       },
       body: JSON.stringify({ prompt }),
-      signal: AbortSignal.timeout(95000) 
+      // DeepSeek-R1 thinking can take up to 5 minutes on moderate hardware
+      signal: AbortSignal.timeout(300000) 
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: "Unknown server error" }));
-      throw new Error(errorData.detail || `Bridge Error (${response.status})`);
+      const errorData = await response.json().catch(() => ({ detail: "Request processing failed." }));
+      throw new Error(errorData.detail || `Server Error ${response.status}`);
     }
 
     return await response.json();
@@ -37,8 +35,10 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   } catch (error: any) {
     console.error("Pipeline Error:", error);
     let msg = error.message || "Connection failed.";
-    if (msg.includes("Failed to fetch")) {
-      msg = "Cannot reach Remote Computer. Check your Ngrok URL and ensure the server is running.";
+    if (error.name === 'TimeoutError') {
+      msg = "DeepSeek is still thinking. The query is taking longer than 5 minutes. Try a simpler question.";
+    } else if (msg.includes("Failed to fetch")) {
+      msg = "Cannot reach Remote Computer. Check Ngrok status.";
     }
     throw new Error(msg);
   }
