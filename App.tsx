@@ -19,8 +19,10 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const checkConnection = useCallback(async (urlOverride?: string) => {
-    const targetUrl = (urlOverride || bridgeUrl).replace(/\/$/, "");
-    if (!targetUrl) return setConnStatus('offline');
+    // Logic: if urlOverride/bridgeUrl is empty, use relative path '/api'.
+    const baseUrl = (urlOverride || bridgeUrl || "").replace(/\/$/, "");
+    const pingUrl = baseUrl ? `${baseUrl}/api/ping` : '/api/ping';
+    const healthUrl = baseUrl ? `${baseUrl}/api/health` : '/api/health';
     
     setConnStatus('testing');
     
@@ -28,7 +30,7 @@ const App: React.FC = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); 
 
-      const pingRes = await fetch(`${targetUrl}/ping`, { 
+      const pingRes = await fetch(pingUrl, { 
         headers: { 'ngrok-skip-browser-warning': '69420' },
         signal: controller.signal
       }).catch(() => null);
@@ -41,17 +43,19 @@ const App: React.FC = () => {
         return;
       }
 
-      const healthRes = await fetch(`${targetUrl}/health`, { 
+      const healthRes = await fetch(healthUrl, { 
           headers: { 'ngrok-skip-browser-warning': '69420' } 
       });
       const healthData = await healthRes.json();
       
       if (healthData.db_connected) {
         setConnStatus('online');
-        localStorage.setItem('og_bridge_url', targetUrl);
+        // Only save if user explicitly typed a URL. If empty (default), keep it empty.
+        if (urlOverride) localStorage.setItem('og_bridge_url', baseUrl);
+        
         setLastError(null);
         
-        initSchema(targetUrl).then(schemaResult => {
+        initSchema(baseUrl).then(schemaResult => {
           if (schemaResult.data && typeof schemaResult.data === 'object') {
             setDetectedSchema(schemaResult.data);
           }
@@ -94,6 +98,7 @@ const App: React.FC = () => {
                 <input 
                   type="text" 
                   value={bridgeUrl} 
+                  placeholder="Leave empty for local automatic mode"
                   onChange={(e) => setBridgeUrl(e.target.value)} 
                   className="w-full bg-black/40 border border-slate-700 rounded-xl px-5 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50" 
                 />

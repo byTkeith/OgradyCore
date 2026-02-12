@@ -16,7 +16,6 @@ export const CORE_TABLES = [
 ];
 
 // Based on PDF Documentation Pages 6, 8, 11
-// Includes: Cash Sales (1,66), Credit Sales (10,70), Quotes (34,35), BOM (84), Contracts (100)
 export const SALES_TRANSACTION_TYPES = [
   '1', '2', '10', '11', '12', '14', '15', '16', 
   '34', '35', '52', '66', '67', '68', '70', '80', '84', '100'
@@ -26,7 +25,6 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.AUDIT": {
     description: "Transactional records.",
     primaryKeys: ["ANUMBER", "LineGUID", "HeadGuid", "TransactionDate", "PLUCode", "TransactionType", "SequenceNumber", "ProviderTRNR"],
-    // v7.8 FIX: Reverted DebtorNumber to DebtorOrCreditorNumber based on SQL Error 207
     fields: ["ANUMBER", "Created_Date", "LineGUID", "HeadGuid", "StockType", "OrderDate", "TransactionDate", "PLUCode", "Description", "TransactionType", "CostPriceExcl", "RetailPriceExcl", "Qty", "LineDiscountPerc", "TransactionNumber", "DebtorOrCreditorNumber", "WorkstationNumber", "Operator", "TaxValue", "TaxNumber", "RoundValue", "ShiftNumber", "OrderQty", "PaymentMethod", "Branch", "OnHandAfterTran", "LoyaltyNumber"]
   },
   "dbo.STOCK": {
@@ -46,9 +44,6 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
     primaryKeys: ["ANUMBER", "KredGUID", "Number"],
     fields: ["ANUMBER", "Status", "KredGUID", "Number", "Name", "TelephoneNumber", "MaxCreditLimit", "ContactPerson", "EmailAddress", "KredAccStatus"]
   },
-  "dbo.TRANSACTIONS": { 
-    primaryKeys: ["ANUMBER", "GUID"], 
-    fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
   // --- EXTENDED SCHEMA (Tier 2) ---
   "dbo.AUDIT_CREDITOR": { primaryKeys: ["ANUMBER", "OuLineGuid", "OuHeadGuid"], fields: ["ANUMBER", "OuLineGuid", "OuHeadGuid", "Number", "Description", "TransactionType", "Name", "PostalCode", "TelephoneNumber"] },
   "dbo.AUDIT_DEBTOR": { primaryKeys: ["ANUMBER", "OuLineGuid", "OuHeadGuid"], fields: ["ANUMBER", "OuLineGuid", "OuHeadGuid", "Number", "Description", "TransactionType", "Surname", "MaxCreditLimit", "AccountType"] },
@@ -82,9 +77,12 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.STOCK_MULTI_PLU": { primaryKeys: ["ANUMBER", "PLUCode", "MainStockCode"], fields: ["ANUMBER", "PLUCode", "MainStockCode", "GRVNumber", "InvoiceNumber"] },
   "dbo.STOCK_PRODUCTION": { primaryKeys: ["ANUMBER", "GUID", "Barcode"], fields: ["ANUMBER", "Barcode", "Description", "OnHand", "CostPriceExcl"] },
   "dbo.STOCK_SUPPLIER": { primaryKeys: ["ANUMBER", "Supplier", "PLUCode"], fields: ["ANUMBER", "Supplier", "PLUCode", "CostPriceExcl", "GRVNumber", "LeadTimeDays"] },
-  //"dbo.TRANSACTIONS": { primaryKeys: ["ANUMBER", "GUID"], fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
+  "dbo.TRANSACTIONS": { primaryKeys: ["ANUMBER", "GUID"], fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] },
   "dbo.TRN_AUDIT": { primaryKeys: ["SEQDate", "ANUMBER", "TransactionDate"], fields: ["ANUMBER", "TransactionDate", "PLUCode", "Description", "Qty", "RetailPriceExcl"] }
 };
 
 export const MOCK_CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-export const DEFAULT_BRIDGE_URL = 'http://localhost:8000';
+
+// Empty string means "Relative to the current page's domain".
+// This allows the app to work seamlessly when served by Python on port 8000.
+export const DEFAULT_BRIDGE_URL = ''; 

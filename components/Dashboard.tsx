@@ -14,11 +14,14 @@ const Dashboard: React.FC<DashboardProps> = ({ bridgeUrl, isOnline = true }) => 
   const [lastCheck, setLastCheck] = useState<string>(new Date().toLocaleTimeString());
 
   const checkHealth = useCallback(async () => {
-    if (!bridgeUrl) return;
     const start = Date.now();
     try {
-      const baseUrl = bridgeUrl.replace(/\/$/, "");
-      const res = await fetch(`${baseUrl}/health`, {
+      // Logic: if bridgeUrl is empty, we use relative '/api/health'.
+      // If bridgeUrl is set (legacy override), we use that.
+      const baseUrl = bridgeUrl ? bridgeUrl.replace(/\/$/, "") : "";
+      const endpoint = baseUrl ? `${baseUrl}/api/health` : '/api/health';
+
+      const res = await fetch(endpoint, {
         headers: { 'ngrok-skip-browser-warning': '69420' },
         signal: AbortSignal.timeout(5000)
       });
