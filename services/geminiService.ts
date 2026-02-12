@@ -21,7 +21,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
         'Accept': 'application/json'
       },
       body: JSON.stringify({ prompt }),
-      // DeepSeek-R1 thinking can take up to 5 minutes on moderate hardware
+      // Extended timeout to support DeepSeek/Llama heavy reasoning
       signal: AbortSignal.timeout(300000) 
     });
 
@@ -36,9 +36,9 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     console.error("Pipeline Error:", error);
     let msg = error.message || "Connection failed.";
     if (error.name === 'TimeoutError') {
-      msg = "DeepSeek is still thinking. The query is taking longer than 5 minutes. Try a simpler question.";
+      msg = "The request timed out. The local AI is taking too long to process this query. Try a simpler question or check your server load.";
     } else if (msg.includes("Failed to fetch")) {
-      msg = "Cannot reach Remote Computer. Check Ngrok status.";
+      msg = "Cannot reach Remote Computer. Check Ngrok status or verify the Bridge URL in settings.";
     }
     throw new Error(msg);
   }
