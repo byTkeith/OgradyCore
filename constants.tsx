@@ -6,7 +6,9 @@ export const CORE_TABLES = [
   "dbo.STOCK", 
   "dbo.TYPES", 
   "dbo.DEBTOR", 
-  "dbo.CREDITOR"
+  "dbo.CREDITOR",
+  "dbo.TRANSACTIONS",
+  "dbo.ORDERS"
 ];
 
 export const SALES_TRANSACTION_TYPES = [
@@ -36,6 +38,14 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.CREDITOR": {
     primaryKeys: ["ANUMBER", "KredGUID", "Number"],
     fields: ["ANUMBER", "Status", "KredGUID", "Number", "Name", "TelephoneNumber", "MaxCreditLimit", "ContactPerson", "EmailAddress", "KredAccStatus"]
+  },
+  "dbo.TRANSACTIONS": { 
+    primaryKeys: ["ANUMBER", "GUID"], 
+    fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] 
+  }, 
+  "dbo.ORDERS": { 
+    primaryKeys: ["ANUMBER", "GUID", "OrderDate", "OrderNumber"], 
+    fields: ["ANUMBER", "OrderDate", "OrderNumber", "Description", "PriceExclusive", "Qty"] 
   }
 };
 
