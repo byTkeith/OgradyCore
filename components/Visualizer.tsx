@@ -16,19 +16,32 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
 
   if (!data || data.length === 0) return null;
 
+  // Key safety resolver for Recharts
+  const resolveKeys = () => {
+    const firstRow = data[0];
+    const allKeys = Object.keys(firstRow);
+    const findKey = (t: string) => allKeys.find(k => k.toLowerCase() === t.toLowerCase()) || null;
+    
+    const xKey = findKey(xAxis) || allKeys[0];
+    const yKey = findKey(yAxis) || allKeys[1] || allKeys[0];
+    return { xKey, yKey };
+  };
+
+  const { xKey, yKey } = resolveKeys();
+
   const renderChart = () => {
     switch (visualizationType) {
       case 'bar':
         return (
           <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey={xAxis} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+            <XAxis dataKey={xKey} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <Tooltip 
               cursor={{ fill: 'rgba(255,255,255,0.05)' }}
               contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '11px' }}
             />
-            <Bar dataKey={yAxis} radius={[4, 4, 0, 0]} animationDuration={1500}>
+            <Bar dataKey={yKey} radius={[4, 4, 0, 0]} animationDuration={1500}>
               {data.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} />
               ))}
@@ -39,12 +52,12 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
         return (
           <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey={xAxis} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+            <XAxis dataKey={xKey} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '11px' }} />
             <Line 
               type="monotone" 
-              dataKey={yAxis} 
+              dataKey={yKey} 
               stroke="#10b981" 
               strokeWidth={3} 
               dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} 
@@ -58,8 +71,8 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <PieChart>
             <Pie
               data={data}
-              dataKey={yAxis}
-              nameKey={xAxis}
+              dataKey={yKey}
+              nameKey={xKey}
               cx="50%"
               cy="50%"
               innerRadius={window.innerWidth < 768 ? 40 : 60}
@@ -86,22 +99,11 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey={xAxis} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+            <XAxis dataKey={xKey} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
             <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '11px' }} />
-            <Area type="monotone" dataKey={yAxis} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={3} animationDuration={1500} />
+            <Area type="monotone" dataKey={yKey} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={3} animationDuration={1500} />
           </AreaChart>
-        );
-      case 'scatter':
-        return (
-          <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-            <XAxis type="number" dataKey={xAxis} name={xAxis} stroke="#64748b" fontSize={10} />
-            <YAxis type="number" dataKey={yAxis} name={yAxis} stroke="#64748b" fontSize={10} />
-            <ZAxis type="number" range={[60, 400]} />
-            <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '11px' }} />
-            <Scatter name="Distribution" data={data} fill="#8b5cf6" animationDuration={1500} />
-          </ScatterChart>
         );
       default:
         return <div className="text-slate-500 italic text-center py-10">Unsupported visualization type.</div>;
@@ -114,13 +116,8 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
         <div>
           <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">Business Intelligence Core</h3>
           <p className="text-sm md:text-lg font-black text-slate-100 mt-1 capitalize tracking-tight leading-none">
-            {visualizationType} Distribution: <span className="text-slate-400 font-medium italic">{yAxis} vs {xAxis}</span>
+            {visualizationType} Distribution: <span className="text-slate-400 font-medium italic">{yKey} vs {xKey}</span>
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/20 font-black uppercase tracking-widest">
-            Verified Schema Link
-          </span>
         </div>
       </div>
       <div className="h-[280px] md:h-[350px] w-full">
