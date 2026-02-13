@@ -7,6 +7,19 @@ interface InsightPanelProps {
 }
 
 const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
+  // Utility to safely render text even if AI returns an object (fixes React Error #31)
+  const renderSafe = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      // If AI returns {text: "...", value: 123}, extract text
+      if (val.text) return String(val.text);
+      // Fallback to stringified version to prevent crash
+      return JSON.stringify(val);
+    }
+    return String(val);
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-emerald-900/40 to-slate-950 border border-emerald-500/20 rounded-[2.5rem] p-10 shadow-2xl backdrop-blur-md">
@@ -23,7 +36,7 @@ const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
         <div className="relative mb-12">
           <div className="absolute -left-4 top-0 bottom-0 w-1 bg-emerald-500 rounded-full shadow-[0_0_15px_#10b981]"></div>
           <p className="text-xl md:text-2xl text-slate-100 font-bold italic pl-6 leading-relaxed">
-            "{insight.summary}"
+            "{renderSafe(insight.summary)}"
           </p>
         </div>
 
@@ -35,9 +48,9 @@ const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
               Market Trends
             </h4>
             <div className="space-y-3">
-              {insight.trends.map((item, i) => (
+              {(insight.trends || []).map((item, i) => (
                 <div key={i} className="group bg-slate-900/60 p-4 rounded-xl border border-slate-800 hover:border-emerald-500/40 transition-all">
-                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{item}</p>
+                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{renderSafe(item)}</p>
                 </div>
               ))}
             </div>
@@ -50,9 +63,9 @@ const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
               Risk Factors
             </h4>
             <div className="space-y-3">
-              {insight.anomalies.map((item, i) => (
+              {(insight.anomalies || []).map((item, i) => (
                 <div key={i} className="group bg-slate-900/60 p-4 rounded-xl border border-slate-800 hover:border-rose-500/40 transition-all">
-                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{item}</p>
+                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{renderSafe(item)}</p>
                 </div>
               ))}
             </div>
@@ -65,9 +78,9 @@ const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
               Strategic Moves
             </h4>
             <div className="space-y-3">
-              {insight.suggestions.map((item, i) => (
+              {(insight.suggestions || []).map((item, i) => (
                 <div key={i} className="group bg-slate-900/60 p-4 rounded-xl border border-slate-800 hover:border-blue-500/40 transition-all">
-                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{item}</p>
+                  <p className="text-sm text-slate-300 group-hover:text-white transition-colors leading-snug">{renderSafe(item)}</p>
                 </div>
               ))}
             </div>
