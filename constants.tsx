@@ -12,8 +12,7 @@ export const CORE_TABLES = [
 ];
 
 export const SALES_TRANSACTION_TYPES = [
-  '1', '2', '10', '11', '12', '14', '15', '16', 
-  '34', '35', '52', '66', '67', '68', '70', '80', '84', '100'
+  '66', '67', '68', '70', '84', '100'
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
