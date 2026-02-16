@@ -12,39 +12,24 @@ export const CORE_TABLES = [
 ];
 
 export const SALES_TRANSACTION_TYPES = [
-  '66', '67', '68', '70', '84', '100'
+  '66', '67', '68', '70', '84', '100', '101', '102', '118'
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.AUDIT": {
-    description: "Transactional records.",
+    description: "Main transaction ledger. Join to STOCK on Description+ANUMBER due to barcode inconsistency.",
     primaryKeys: ["ANUMBER", "LineGUID", "HeadGuid", "TransactionDate", "PLUCode", "TransactionType", "SequenceNumber"],
     fields: ["ANUMBER", "Created_Date", "LineGUID", "HeadGuid", "StockType", "OrderDate", "TransactionDate", "PLUCode", "Description", "TransactionType", "CostPriceExcl", "RetailPriceExcl", "Qty", "LineDiscountPerc", "HeadDiscountPerc", "TransactionNumber", "DebtorOrCreditorNumber", "WorkstationNumber", "Operator", "TaxValue", "TaxNumber", "RoundValue", "ShiftNumber", "OrderQty", "PaymentMethod", "Branch", "OnHandAfterTran", "LoyaltyNumber"]
   },
   "dbo.STOCK": {
-    description: "Inventory Master.",
+    description: "Inventory master. Use ANUMBER for branch-specific pricing.",
     primaryKeys: ["ANUMBER", "GUID", "Barcode"],
     fields: ["ANUMBER", "Status", "GUID", "Barcode", "Description", "Description2", "SupplierNumber", "CostPriceExcl", "RetailPriceExcl", "DangerLevel", "OnHand", "DebtorOnOrder", "CreditorOnOrder", "TotalPurchased", "AvgCostPrice", "TotalQtySold", "AvgRetailPrice", "MarkUpPercentage", "LastSoldDate", "LastPurchasedDate", "StockType", "TaxType", "TaxRate"]
   },
-  "dbo.TYPES": {
-    primaryKeys: ["TABLE_ID", "TYPE_NAME_ID", "TYPE_ID"],
-    fields: ["TABLE_ID", "TABLE_NAME", "TYPE_NAME_ID", "TYPE_NAME", "TYPE_ID", "TYPE_DESCRIPTION"]
-  },
   "dbo.DEBTOR": {
+    description: "Customer master. Join on Number + ANUMBER.",
     primaryKeys: ["ANUMBER", "DebGUID", "Number"],
     fields: ["ANUMBER", "Status", "DebGUID", "Number", "Title", "Initials", "Surname", "AccountType", "MaxCreditLimit", "ExpiryDate", "LastTransaction", "SalesRep", "EmailAddress"]
-  },
-  "dbo.CREDITOR": {
-    primaryKeys: ["ANUMBER", "KredGUID", "Number"],
-    fields: ["ANUMBER", "Status", "KredGUID", "Number", "Name", "TelephoneNumber", "MaxCreditLimit", "ContactPerson", "EmailAddress", "KredAccStatus"]
-  },
-  "dbo.TRANSACTIONS": { 
-    primaryKeys: ["ANUMBER", "GUID"], 
-    fields: ["ANUMBER", "TransactionNumber", "InvoiceNumber", "InvoiceDate", "InvoicePrice", "PaidUp"] 
-  }, 
-  "dbo.ORDERS": { 
-    primaryKeys: ["ANUMBER", "GUID", "OrderDate", "OrderNumber"], 
-    fields: ["ANUMBER", "OrderDate", "OrderNumber", "Description", "PriceExclusive", "Qty"] 
   }
 };
 
