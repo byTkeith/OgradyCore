@@ -21,7 +21,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
         'Accept': 'application/json'
       },
       body: JSON.stringify({ prompt }),
-      signal: AbortSignal.timeout(300000) 
+      signal: AbortSignal.timeout(180000) // 3 minute timeout for heavy local LLM processing
     });
 
     if (!response.ok) {
@@ -30,8 +30,8 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
         const errorData = await response.json();
         errorMsg = errorData.detail || errorMsg;
       } catch (e) {
-        if (response.status === 404) errorMsg = "The Bridge API endpoint (/api/analyze) was not found. Ensure the Python server is running on port 8000.";
-        if (response.status === 500) errorMsg = "The Bridge Node encountered an internal error. Check the terminal logs.";
+        if (response.status === 404) errorMsg = "API endpoint not found. Ensure main.py is running on port 8000.";
+        if (response.status === 500) errorMsg = "The Intelligence Node (AI) failed to generate a valid response. Rephrase your request.";
       }
       throw new Error(errorMsg);
     }
@@ -42,9 +42,9 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     console.error("Pipeline Error:", error);
     let msg = error.message || "Connection failed.";
     if (error.name === 'TimeoutError') {
-      msg = "Request timed out. The local AI is processing but taking too long.";
+      msg = "AI Analyst timed out. Your local AI is processing but taking longer than 3 minutes.";
     } else if (msg.includes("Failed to fetch")) {
-      msg = "Cannot reach the Intelligence Node. Ensure the backend server is running on port 8000.";
+      msg = "Cannot reach the Intelligence Node. Check your Bridge Link settings or ensure the Python server is running.";
     }
     throw new Error(msg);
   }
