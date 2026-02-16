@@ -21,13 +21,19 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
         'Accept': 'application/json'
       },
       body: JSON.stringify({ prompt }),
-      // Extended timeout to support DeepSeek/Llama heavy reasoning
       signal: AbortSignal.timeout(300000) 
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: "Request processing failed." }));
-      throw new Error(errorData.detail || `Server Error ${response.status}`);
+      let errorMsg = `Server Error ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.detail || errorMsg;
+      } catch (e) {
+        if (response.status === 404) errorMsg = "The Bridge API endpoint (/api/analyze) was not found. Ensure the Python server is running on port 8000.";
+        if (response.status === 500) errorMsg = "The Bridge Node encountered an internal error. Check the terminal logs.";
+      }
+      throw new Error(errorMsg);
     }
 
     return await response.json();
@@ -36,9 +42,9 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     console.error("Pipeline Error:", error);
     let msg = error.message || "Connection failed.";
     if (error.name === 'TimeoutError') {
-      msg = "The request timed out. The local AI is taking too long to process this query. Try a simpler question or check your server load.";
+      msg = "Request timed out. The local AI is processing but taking too long.";
     } else if (msg.includes("Failed to fetch")) {
-      msg = "Cannot reach Remote Computer. Check Ngrok status or verify the Bridge URL in settings.";
+      msg = "Cannot reach the Intelligence Node. Ensure the backend server is running on port 8000.";
     }
     throw new Error(msg);
   }

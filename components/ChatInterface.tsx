@@ -12,30 +12,41 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
     </div>
   );
   
-  // Resolve keys robustly (case-insensitive and alias-aware)
+  // Resolve keys robustly (handling "Account #", "Customer / Company Name", etc.)
   const getKeys = () => {
     const firstRow = data[0];
     const allKeys = Object.keys(firstRow);
     
     const findKey = (target: string) => {
+      if (!target) return null;
       // Direct match
       if (firstRow.hasOwnProperty(target)) return target;
       // Case-insensitive match
       const found = allKeys.find(k => k.toLowerCase() === target.toLowerCase());
       if (found) return found;
+      // Substring match for things like "Account" in "Account #"
+      const fuzzy = allKeys.find(k => k.toLowerCase().includes(target.toLowerCase()));
+      if (fuzzy) return fuzzy;
       return null;
     };
 
     const xKey = findKey(xAxis) || allKeys[0];
     const yKey = findKey(yAxis) || allKeys[1] || allKeys[0];
-    return { xKey, yKey };
+    const otherKeys = allKeys.filter(k => k !== xKey && k !== yKey);
+
+    return { xKey, yKey, otherKeys, allKeys };
   };
 
-  const { xKey, yKey } = getKeys();
+  const { xKey, yKey, otherKeys, allKeys } = getKeys();
 
   const formatVal = (val: any) => {
-    if (typeof val === 'number') return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return String(val || 'N/A');
+    if (typeof val === 'number') {
+        return val.toLocaleString(undefined, { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        });
+    }
+    return String(val || '-');
   };
 
   return (
@@ -48,15 +59,21 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="bg-black/20 text-slate-500 font-black uppercase tracking-tighter">
-              <th className="px-4 py-3 whitespace-nowrap">{xKey}</th>
-              <th className="px-4 py-3 text-right whitespace-nowrap">{yKey}</th>
+              {allKeys.map(key => (
+                 <th key={key} className={`px-4 py-3 whitespace-nowrap ${key === yKey ? 'text-right' : ''}`}>
+                    {key}
+                 </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {data.slice(0, 15).map((row, i) => (
+            {data.slice(0, 20).map((row, i) => (
               <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
-                <td className="px-4 py-3 text-slate-300 font-medium">{String(row[xKey] || 'N/A')}</td>
-                <td className="px-4 py-3 text-right text-emerald-400 font-mono font-bold">{formatVal(row[yKey])}</td>
+                {allKeys.map(key => (
+                   <td key={key} className={`px-4 py-3 ${key === yKey ? 'text-right text-emerald-400 font-mono font-bold' : 'text-slate-300 font-medium'}`}>
+                      {formatVal(row[key])}
+                   </td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -118,24 +135,27 @@ const ChatInterface: React.FC = () => {
             <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-2xl">
               <span className="text-4xl">🔎</span>
             </div>
-            <p className="text-slate-500 text-sm font-medium italic border-t border-slate-800 pt-4">
-              "Show top 20 buyers for enamel over the last 5 years"
-            </p>
+            <div className="space-y-2">
+              <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Awaiting Strategic Request</p>
+              <p className="text-slate-500 text-[10px] font-medium italic">
+                Try: "Show top 20 buyers for enamel over the last 5 years"
+              </p>
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-[2rem] max-w-2xl mx-auto">
-             <h4 className="text-[10px] font-black uppercase text-rose-500 mb-2">Analysis Alert</h4>
+          <div className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-[2rem] max-w-2xl mx-auto animate-in fade-in">
+             <h4 className="text-[10px] font-black uppercase text-rose-500 mb-2">Analysis Pipeline Alert</h4>
              <p className="text-rose-400 text-xs font-mono break-words leading-relaxed">{error}</p>
-             <button onClick={() => setError(null)} className="mt-4 text-[10px] font-black uppercase bg-slate-800 text-white px-4 py-2 rounded-lg">Dismiss</button>
+             <button onClick={() => setError(null)} className="mt-4 text-[10px] font-black uppercase bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">Dismiss</button>
           </div>
         )}
 
         {results.map((item, idx) => (
           <div key={idx} className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex justify-end">
-              <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none max-w-[80%] shadow-lg font-bold">
+              <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none max-w-[80%] shadow-lg font-bold border border-slate-700">
                 {item.query}
               </div>
             </div>
@@ -158,7 +178,7 @@ const ChatInterface: React.FC = () => {
               ) : (
                 <div className="space-y-6">
                   <div className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-center text-slate-400 italic">
-                    Query completed but zero records match the criteria in the ERP database.
+                    Pipeline executed successfully, but zero matching records were found in the database.
                   </div>
                   <InsightPanel insight={item.insight} />
                 </div>
@@ -169,7 +189,7 @@ const ChatInterface: React.FC = () => {
 
         {isLoading && (
           <div className="space-y-4 animate-pulse md:ml-10">
-            <div className="h-10 bg-slate-900/50 rounded-full w-2/3 ml-auto"></div>
+            <div className="h-10 bg-slate-800/50 rounded-full w-2/3 ml-auto"></div>
             <div className="h-20 bg-slate-900/50 rounded-3xl w-full border border-slate-800"></div>
             <div className="h-64 bg-slate-900/50 rounded-3xl w-full border border-slate-800"></div>
           </div>
@@ -182,13 +202,13 @@ const ChatInterface: React.FC = () => {
             type="text" 
             value={query} 
             onChange={(e) => setQuery(e.target.value)} 
-            placeholder="Ask about Sales, Stock, or Debtors..." 
-            className="w-full bg-slate-900 border border-slate-800 text-white pl-6 pr-28 py-4 rounded-full focus:outline-none focus:border-emerald-600 font-medium transition-all" 
+            placeholder="Search Sales, Trends, or Top Debtors..." 
+            className="w-full bg-slate-900 border border-slate-800 text-white pl-6 pr-28 py-4 rounded-full focus:outline-none focus:border-emerald-600 font-medium transition-all shadow-xl" 
           />
           <button 
             type="submit" 
             disabled={isLoading || !query.trim()} 
-            className="absolute right-2 top-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-full font-black text-[9px] uppercase tracking-widest transition-all"
+            className="absolute right-2 top-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-full font-black text-[9px] uppercase tracking-widest transition-all disabled:opacity-50"
           >
             {isLoading ? '...' : 'ANALYZE'}
           </button>
