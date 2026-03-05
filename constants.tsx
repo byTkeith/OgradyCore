@@ -2,6 +2,8 @@
 import React from 'react';
 
 export const CORE_TABLES = [
+  "dbo.v_AI_Sales_Performance",
+  "dbo.v_AI_Stock_Status",
   "dbo.AUDIT", 
   "dbo.STOCK", 
   "dbo.TYPES", 
@@ -16,6 +18,16 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
+  "dbo.v_AI_Sales_Performance": {
+    description: "EXECUTIVE VIEW: Sales, Profit, Margin, Customers, Reps. Fiscal Year logic applied.",
+    primaryKeys: ["InvoiceNumber", "PLUCode"],
+    fields: ["SiteID", "TranDate", "InvoiceNumber", "FiscalYear", "FiscalPeriod", "CalendarMonth", "PLUCode", "ProductName", "AccountCode", "CustomerName", "SalesRepName", "NetQty", "NetSalesExclVAT", "NetSalesInclVAT", "NetCost", "NetProfit", "MarginPercent"]
+  },
+  "dbo.v_AI_Stock_Status": {
+    description: "INVENTORY VIEW: Stock levels, costs, departments, status.",
+    primaryKeys: ["StockCode", "SiteID"],
+    fields: ["SiteID", "StockCode", "ProductName", "MainDepartment", "SubDepartment", "QuantityOnHand", "UnitCost", "ListPrice", "StockStatus", "LastSoldDate", "LastPurchasedDate"]
+  },
   "dbo.AUDIT": {
     description: "Main transaction ledger. Join to STOCK on Description+ANUMBER due to barcode inconsistency.",
     primaryKeys: ["ANUMBER", "LineGUID", "HeadGuid", "TransactionDate", "PLUCode", "TransactionType", "SequenceNumber"],
