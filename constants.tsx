@@ -1,6 +1,5 @@
 
-import React from 'react';
-
+import React from 'react'
 export const CORE_TABLES = [
   "dbo.v_AI_Sales_Truth",
   "dbo.v_AI_Branch_Trends_5Yr",
@@ -28,12 +27,12 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.v_AI_Branch_Trends_5Yr": {
     description: "BRANCH TRENDS: Year-over-Year performance comparison for branches and regions.",
     primaryKeys: ["SiteID", "BranchName", "FiscalYear"],
-    fields: ["SiteID", "BranchName", "SalesRepName", "FiscalYear", "CurrentYearRevenue", "PreviousYearRevenue", "RevenueVariance", "PerformanceStatus"]
+    fields: ["SiteID", "AccountCode", "BranchName", "SalesRepName", "FiscalYear", "AnnualRevenue", "PrevYearRev", "RevenueVariance", "PerformanceStatus"]
   },
   "dbo.v_AI_Product_Size_Trends": {
     description: "PRODUCT TRENDS: Performance by pack size, product, and region over fiscal years.",
     primaryKeys: ["SiteID", "BranchName", "ProductName", "PackSize", "FiscalYear"],
-    fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "CurrentYearQty", "PreviousYearQty", "QtyVariance", "ProductTrend"]
+    fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "TotalQty", "TotalRevenue", "PrevQty", "QtyVariance", "ProductTrend"]
   },
   "dbo.v_AI_Stock_Status": {
     description: "INVENTORY VIEW: Stock levels, costs, departments, status.",
