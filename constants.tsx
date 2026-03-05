@@ -32,8 +32,8 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   },
   "dbo.v_AI_Product_Size_Trends": {
     description: "PRODUCT TRENDS: Performance by pack size, product, and region over fiscal years.",
-    primaryKeys: ["BranchName", "ProductName", "PackSize", "FiscalYear"],
-    fields: ["BranchName", "ProductName", "PackSize", "FiscalYear", "CurrentYearQty", "PreviousYearQty", "QtyVariance", "ProductTrend"]
+    primaryKeys: ["SiteID", "BranchName", "ProductName", "PackSize", "FiscalYear"],
+    fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "CurrentYearQty", "PreviousYearQty", "QtyVariance", "ProductTrend"]
   },
   "dbo.v_AI_Stock_Status": {
     description: "INVENTORY VIEW: Stock levels, costs, departments, status.",
