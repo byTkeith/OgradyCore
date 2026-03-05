@@ -12,19 +12,16 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
     </div>
   );
   
-  // Resolve keys robustly (handling "Account #", "Customer / Company Name", etc.)
+  // Resolve keys robustly
   const getKeys = () => {
     const firstRow = data[0];
     const allKeys = Object.keys(firstRow);
     
     const findKey = (target: string) => {
       if (!target) return null;
-      // Direct match
       if (firstRow.hasOwnProperty(target)) return target;
-      // Case-insensitive match
       const found = allKeys.find(k => k.toLowerCase() === target.toLowerCase());
       if (found) return found;
-      // Substring match for things like "Account" in "Account #"
       const fuzzy = allKeys.find(k => k.toLowerCase().includes(target.toLowerCase()));
       if (fuzzy) return fuzzy;
       return null;
@@ -32,12 +29,18 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
 
     const xKey = findKey(xAxis) || allKeys[0];
     const yKey = findKey(yAxis) || allKeys[1] || allKeys[0];
-    const otherKeys = allKeys.filter(k => k !== xKey && k !== yKey);
+    const allNumericKeys = allKeys.filter(k => typeof firstRow[k] === 'number');
 
-    return { xKey, yKey, otherKeys, allKeys };
+    return { xKey, yKey, allKeys, allNumericKeys };
   };
 
-  const { xKey, yKey, otherKeys, allKeys } = getKeys();
+  const { xKey, yKey, allKeys, allNumericKeys } = getKeys();
+
+  // Calculate Grand Totals
+  const totals = allNumericKeys.reduce((acc, key) => {
+    acc[key] = data.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
+    return acc;
+  }, {} as Record<string, number>);
 
   const formatVal = (val: any) => {
     if (typeof val === 'number') {
@@ -50,34 +53,55 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
   };
 
   return (
-    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden mb-6">
-      <div className="bg-slate-900/60 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Statistical Summary</span>
-        <span className="text-[9px] text-slate-500 font-mono">{data.length} records found</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="bg-black/20 text-slate-500 font-black uppercase tracking-tighter">
-              {allKeys.map(key => (
-                 <th key={key} className={`px-4 py-3 whitespace-nowrap ${key === yKey ? 'text-right' : ''}`}>
-                    {key}
-                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {data.slice(0, 20).map((row, i) => (
-              <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
+    <div className="space-y-6">
+      {/* Grand Totals Card */}
+      {allNumericKeys.length > 0 && data.length > 1 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {allNumericKeys.map(key => (
+            <div key={key} className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl shadow-xl">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{key} TOTAL</p>
+              <p className="text-2xl font-black text-emerald-400 font-mono tracking-tighter">
+                {formatVal(totals[key])}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="bg-slate-900/60 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Statistical Summary</span>
+          <span className="text-[9px] text-slate-500 font-mono">{data.length} records found</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-black/20 text-slate-500 font-black uppercase tracking-tighter">
                 {allKeys.map(key => (
-                   <td key={key} className={`px-4 py-3 ${key === yKey ? 'text-right text-emerald-400 font-mono font-bold' : 'text-slate-300 font-medium'}`}>
-                      {formatVal(row[key])}
-                   </td>
+                   <th key={key} className={`px-4 py-3 whitespace-nowrap ${typeof data[0][key] === 'number' ? 'text-right' : ''}`}>
+                      {key}
+                   </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {data.slice(0, 50).map((row, i) => (
+                <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
+                  {allKeys.map(key => (
+                     <td key={key} className={`px-4 py-3 ${typeof row[key] === 'number' ? 'text-right text-emerald-400 font-mono font-bold' : 'text-slate-300 font-medium'}`}>
+                        {formatVal(row[key])}
+                     </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.length > 50 && (
+            <div className="p-4 text-center bg-black/10 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-t border-slate-800">
+              Showing first 50 of {data.length} records. Scroll for more in the database.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
