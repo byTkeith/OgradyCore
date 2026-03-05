@@ -27,13 +27,13 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   },
   "dbo.v_AI_Branch_Trends_5Yr": {
     description: "BRANCH TRENDS: Year-over-Year performance comparison for branches and regions.",
-    primaryKeys: ["SiteID", "AccountCode", "FiscalYear"],
-    fields: ["SiteID", "AccountCode", "BranchName", "SalesRepName", "FiscalYear", "AnnualRevenue", "AnnualQty", "PrevYearRev", "RevenueVariance", "PerformanceStatus"]
+    primaryKeys: ["SiteID", "BranchName", "FiscalYear"],
+    fields: ["SiteID", "BranchName", "SalesRepName", "FiscalYear", "CurrentYearRevenue", "PreviousYearRevenue", "RevenueVariance", "PerformanceStatus"]
   },
   "dbo.v_AI_Product_Size_Trends": {
     description: "PRODUCT TRENDS: Performance by pack size, product, and region over fiscal years.",
-    primaryKeys: ["SiteID", "BranchName", "ProductName", "PackSize", "FiscalYear"],
-    fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "TotalQty", "TotalRevenue", "PrevQty", "QtyVariance", "ProductTrend"]
+    primaryKeys: ["BranchName", "ProductName", "PackSize", "FiscalYear"],
+    fields: ["BranchName", "ProductName", "PackSize", "FiscalYear", "CurrentYearQty", "PreviousYearQty", "QtyVariance", "ProductTrend"]
   },
   "dbo.v_AI_Stock_Status": {
     description: "INVENTORY VIEW: Stock levels, costs, departments, status.",

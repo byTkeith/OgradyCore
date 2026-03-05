@@ -185,13 +185,15 @@ const ChatInterface: React.FC = () => {
             </div>
             
             <div className="space-y-8 md:pl-10">
-              <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-[2rem]">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">T-SQL GENERATED</h4>
-                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase font-mono">{item.engine}</span>
+              {item.result.sql && (
+                <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-[2rem]">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">T-SQL GENERATED</h4>
+                    <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase font-mono">{item.engine}</span>
+                  </div>
+                  <code className="text-[11px] block bg-black/40 p-4 rounded-xl text-emerald-400 overflow-x-auto font-mono whitespace-pre-wrap">{item.result.sql}</code>
                 </div>
-                <code className="text-[11px] block bg-black/40 p-4 rounded-xl text-emerald-400 overflow-x-auto font-mono whitespace-pre-wrap">{item.result.sql}</code>
-              </div>
+              )}
 
               {item.result.data && item.result.data.length > 0 ? (
                 <>
@@ -201,9 +203,11 @@ const ChatInterface: React.FC = () => {
                 </>
               ) : (
                 <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-center text-slate-400 italic">
-                    Pipeline executed successfully, but zero matching records were found in the database.
-                  </div>
+                  {item.result.sql && (
+                    <div className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-center text-slate-400 italic">
+                      Pipeline executed successfully, but zero matching records were found in the database.
+                    </div>
+                  )}
                   <InsightPanel insight={item.insight} />
                 </div>
               )}
