@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const CORE_TABLES = [
@@ -20,19 +21,19 @@ export const SALES_TRANSACTION_TYPES = [
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.v_AI_Sales_Truth": {
-    description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes. Fiscal Year logic applied.",
+    description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes, Sales Reps. Fiscal Year logic applied.",
     primaryKeys: ["InvoiceNumber", "PLUCode"],
-    fields: ["SiteID", "TranDate", "FiscalYear", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "CustomerName", "NetQty", "NetSalesExclVAT", "NetCost"]
+    fields: ["SiteID", "TranDate", "FiscalYear", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "CustomerName", "SalesRepName", "NetQty", "NetSalesExclVAT", "NetCost"]
   },
   "dbo.v_AI_Branch_Trends_5Yr": {
-    description: "BRANCH TRENDS: Year-over-Year performance comparison for branches.",
-    primaryKeys: ["AccountCode", "FiscalYear"],
-    fields: ["BranchName", "AccountCode", "FiscalYear", "CurrentYearRevenue", "PreviousYearRevenue", "RevenueVariance", "PerformanceStatus"]
+    description: "BRANCH TRENDS: Year-over-Year performance comparison for branches and regions.",
+    primaryKeys: ["SiteID", "AccountCode", "FiscalYear"],
+    fields: ["SiteID", "AccountCode", "BranchName", "SalesRepName", "FiscalYear", "AnnualRevenue", "AnnualQty", "PrevYearRev", "RevenueVariance", "PerformanceStatus"]
   },
   "dbo.v_AI_Product_Size_Trends": {
-    description: "PRODUCT TRENDS: Performance by pack size and product over fiscal years.",
-    primaryKeys: ["BranchName", "ProductName", "PackSize", "FiscalYear"],
-    fields: ["BranchName", "ProductName", "PackSize", "FiscalYear", "CurrentQty", "PreviousYearQty", "ProductTrend"]
+    description: "PRODUCT TRENDS: Performance by pack size, product, and region over fiscal years.",
+    primaryKeys: ["SiteID", "BranchName", "ProductName", "PackSize", "FiscalYear"],
+    fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "TotalQty", "TotalRevenue", "PrevQty", "QtyVariance", "ProductTrend"]
   },
   "dbo.v_AI_Stock_Status": {
     description: "INVENTORY VIEW: Stock levels, costs, departments, status.",
