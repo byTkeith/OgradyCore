@@ -2,6 +2,7 @@
 import React from 'react';
 
 export const CORE_TABLES = [
+  "dbo.v_AI_Omnibus_Sales_Performance",
   "dbo.v_AI_Sales_Truth",
   "dbo.v_AI_Branch_Trends_5Yr",
   "dbo.v_AI_Product_Size_Trends",
@@ -20,6 +21,11 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
+  "dbo.v_AI_Omnibus_Sales_Performance": {
+    description: "UNIVERSAL GOD VIEW: Every transaction, every identity, every pack size, and pre-calculated trends.",
+    primaryKeys: ["InvoiceNumber", "PLUCode", "SiteID"],
+    fields: ["SiteID", "TranDate", "FiscalYear", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "BranchName", "SalesRepName", "Quantity", "Revenue", "Cost", "PrevYearRevenue", "PrevYearQuantity", "PerformanceStatus"]
+  },
   "dbo.v_AI_Sales_Truth": {
     description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes, Sales Reps. Fiscal Year logic applied.",
     primaryKeys: ["InvoiceNumber", "PLUCode"],
