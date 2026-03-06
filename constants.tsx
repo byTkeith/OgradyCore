@@ -22,9 +22,9 @@ export const SALES_TRANSACTION_TYPES = [
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.v_AI_Omnibus_Sales_Performance": {
-    description: "UNIVERSAL GOD VIEW: Every transaction, every identity, every pack size, and pre-calculated trends.",
+    description: "UNIVERSAL GOD VIEW V2: Every transaction, every identity, every pack size, and pre-calculated trends. Handles Delphi Rounding, Tax Flags, and Compound Discounting. No budget logic; use YoY trends.",
     primaryKeys: ["InvoiceNumber", "PLUCode", "SiteID"],
-    fields: ["SiteID", "TranDate", "FiscalYear", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "BranchName", "SalesRepName", "Quantity", "Revenue", "Cost", "PrevYearRevenue", "PrevYearQuantity", "PerformanceStatus"]
+    fields: ["SiteID", "TranDate", "FiscalYear", "CalMonth", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "TransactionType", "QTY", "COSTPRICEEXCL", "BranchName", "SalesRepName", "SalesRepCode", "Quantity", "Revenue", "Cost", "GrossProfit", "PrevYearRevenue", "PrevYearQuantity", "PerformanceStatus"]
   },
   "dbo.v_AI_Sales_Truth": {
     description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes, Sales Reps. Fiscal Year logic applied.",
