@@ -11,6 +11,9 @@ import { initSchema } from './services/geminiService';
 export type ConnStatus = 'testing' | 'online' | 'db_error' | 'offline';
 
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('og_auth') === 'true');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState(false);
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
   const [connStatus, setConnStatus] = useState<ConnStatus>('testing');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -72,6 +75,51 @@ const App: React.FC = () => {
   }, [bridgeUrl]);
 
   useEffect(() => { checkConnection(); }, [checkConnection]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === 'UltiSales2024') {
+      setIsAuthenticated(true);
+      localStorage.setItem('og_auth', 'true');
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-950 font-sans p-6">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 mx-auto mb-4">
+              <span className="text-2xl">🛡️</span>
+            </div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Secure Access</h2>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] italic">OgradyCore Intelligence Node</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Access Key</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className={`w-full bg-black/40 border ${authError ? 'border-rose-500/50' : 'border-slate-700'} rounded-2xl px-6 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50 transition-all`}
+                autoFocus
+              />
+              {authError && <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest ml-1 animate-pulse">Invalid Access Key. Access Denied.</p>}
+            </div>
+            <button type="submit" className="w-full py-5 bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20">Initialize Session</button>
+          </form>
+          
+          <p className="text-center text-[8px] text-slate-600 font-bold uppercase tracking-widest">Authorized Personnel Only</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (activeSection) {

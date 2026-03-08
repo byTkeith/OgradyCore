@@ -109,6 +109,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
 
 const ChatInterface: React.FC = () => {
   const [query, setQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; result: QueryResult; insight: AnalystInsight; engine: string }[]>([]);
@@ -126,6 +127,7 @@ const ChatInterface: React.FC = () => {
 
     setError(null);
     const currentQuery = query;
+    setActiveQuery(currentQuery);
     setQuery('');
     setIsLoading(true);
 
@@ -141,6 +143,7 @@ const ChatInterface: React.FC = () => {
       setError(err.message || "An error occurred.");
     } finally {
       setIsLoading(false);
+      setActiveQuery('');
     }
   };
 
@@ -216,10 +219,30 @@ const ChatInterface: React.FC = () => {
         ))}
 
         {isLoading && (
-          <div className="space-y-4 animate-pulse md:ml-10">
-            <div className="h-10 bg-slate-800/50 rounded-full w-2/3 ml-auto"></div>
-            <div className="h-20 bg-slate-900/50 rounded-3xl w-full border border-slate-800"></div>
-            <div className="h-64 bg-slate-900/50 rounded-3xl w-full border border-slate-800"></div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 md:ml-10">
+            <div className="flex justify-end">
+              <div className="bg-slate-800/50 text-slate-400 px-6 py-4 rounded-3xl rounded-tr-none max-w-[80%] shadow-lg font-bold border border-slate-700/50 italic">
+                {activeQuery || "Processing request..."}
+              </div>
+            </div>
+            
+            <div className="bg-slate-900/40 border border-slate-800/50 p-10 rounded-[2.5rem] flex flex-col items-center justify-center space-y-6">
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs animate-pulse">⚡</span>
+                </div>
+              </div>
+              <div className="text-center space-y-2">
+                <h4 className="text-xs font-black text-white uppercase tracking-widest">Analyzing Intelligence Pipeline</h4>
+                <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-[0.2em] animate-pulse">Do not close this page. Connection must remain active.</p>
+                <div className="flex gap-1 justify-center mt-4">
+                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce"></div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
