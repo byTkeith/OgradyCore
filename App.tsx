@@ -181,13 +181,15 @@ const App: React.FC = () => {
                  </div>
 
                  <div className="bg-black/40 p-8 rounded-[2rem] border border-slate-800/50 space-y-4">
-                   <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Hidden Background Task</h4>
-                   <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Don't want a full service? Run the bridge in a hidden background process. No taskbar icon, no visible window.</p>
+                   <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Cloud Connectivity (Ngrok)</h4>
+                   <p className="text-[10px] text-slate-400 leading-relaxed font-medium">If you are accessing this app via the cloud, you need a tunnel to your local machine. The background task now supports Ngrok automatically.</p>
                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[9px] text-slate-500">
-                     <p className="text-emerald-400 mb-2"># Double-click this file in the bridge folder:</p>
-                     <p>run_hidden.vbs</p>
+                     <p className="text-emerald-400 mb-2"># 1. Get your token from dashboard.ngrok.com</p>
+                     <p className="text-emerald-400 mb-2"># 2. Run this in your bridge folder:</p>
+                     <p className="text-white">echo YOUR_TOKEN_HERE {'>'} ngrok_config.txt</p>
+                     <p className="text-emerald-400 mt-2"># 3. Restart the background task via Task Scheduler</p>
                    </div>
-                   <p className="text-[9px] text-slate-500 italic">Perfect for quick, non-intrusive local development.</p>
+                   <p className="text-[9px] text-slate-500 italic">This ensures the cloud app can "see" your local SQL data.</p>
                  </div>
                </div>
 
