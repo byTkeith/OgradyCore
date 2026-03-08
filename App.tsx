@@ -173,7 +173,8 @@ const App: React.FC = () => {
                    <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Background Service (Windows)</h4>
                    <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Run the bridge as a native Windows Service. No CMD windows, no manual starts. It starts automatically with your PC.</p>
                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[9px] text-slate-500">
-                     <p className="text-emerald-400 mb-2"># Run this in PowerShell as Admin:</p>
+                     <p className="text-rose-400 mb-2"># IMPORTANT: Right-click PowerShell and "Run as Administrator"</p>
+                     <p className="text-emerald-400 mb-2"># Then run this command:</p>
                      <p>powershell -ExecutionPolicy Bypass -File setup_service.ps1</p>
                    </div>
                    <p className="text-[9px] text-slate-500 italic">Uses NSSM for high-reliability service management.</p>
