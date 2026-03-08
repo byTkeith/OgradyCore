@@ -134,24 +134,36 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid md:grid-cols-1 gap-8 max-w-2xl mx-auto">
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Active Endpoint</h3>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
-                    connStatus === 'online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'
-                  }`}>
-                    {connStatus}
-                  </span>
+                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Active Endpoint</h3>
+                    <div className="flex items-center gap-2">
+                      {connStatus === 'offline' && (
+                        <a 
+                          href={bridgeUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[8px] font-black text-slate-500 hover:text-emerald-400 uppercase border border-slate-800 px-2 py-0.5 rounded transition-colors"
+                        >
+                          Open Debug Link ↗
+                        </a>
+                      )}
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                        connStatus === 'online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'
+                      }`}>
+                        {connStatus}
+                      </span>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={bridgeUrl} 
+                    placeholder="Leave empty for local automatic mode"
+                    onChange={(e) => setBridgeUrl(e.target.value)} 
+                    className="w-full bg-black/40 border border-slate-700 rounded-xl px-5 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50" 
+                  />
+                  <button onClick={() => checkConnection(bridgeUrl)} className="w-full py-4 bg-emerald-600 text-white font-black uppercase text-[10px] rounded-xl hover:bg-emerald-500 transition-all">Verify Connection</button>
                 </div>
-                <input 
-                  type="text" 
-                  value={bridgeUrl} 
-                  placeholder="Leave empty for local automatic mode"
-                  onChange={(e) => setBridgeUrl(e.target.value)} 
-                  className="w-full bg-black/40 border border-slate-700 rounded-xl px-5 py-4 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50" 
-                />
-                <button onClick={() => checkConnection(bridgeUrl)} className="w-full py-4 bg-emerald-600 text-white font-black uppercase text-[10px] rounded-xl hover:bg-emerald-500 transition-all">Verify Connection</button>
-              </div>
 
               {lastError && (
                 <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-2xl animate-in fade-in">
