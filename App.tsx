@@ -187,7 +187,9 @@ const App: React.FC = () => {
                      <p className="text-emerald-400 mb-2"># 1. Get your token from dashboard.ngrok.com</p>
                      <p className="text-emerald-400 mb-2"># 2. Run this in your bridge folder:</p>
                      <p className="text-white">echo YOUR_TOKEN_HERE {'>'} ngrok_config.txt</p>
-                     <p className="text-emerald-400 mt-2"># 3. Restart the background task via Task Scheduler</p>
+                     <p className="text-emerald-400 mt-2"># 3. (Optional) For a static domain:</p>
+                     <p className="text-white">echo unpanoplied-marianne-ciliately.ngrok-free.dev {'>'} ngrok_domain.txt</p>
+                     <p className="text-emerald-400 mt-2"># 4. Restart the background task via Task Scheduler</p>
                    </div>
                    <p className="text-[9px] text-slate-500 italic">This ensures the cloud app can "see" your local SQL data.</p>
                  </div>
