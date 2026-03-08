@@ -161,6 +161,44 @@ const App: React.FC = () => {
               )}
             </div>
 
+            {/* Service Management Section */}
+            <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8">
+               <div className="flex items-center justify-between">
+                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">⚙️ Service Management (Headless Mode)</h3>
+                 <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase rounded-full border border-emerald-500/20">Efficiency Protocol v1.0</span>
+               </div>
+               
+               <div className="grid md:grid-cols-2 gap-8">
+                 <div className="bg-black/40 p-8 rounded-[2rem] border border-slate-800/50 space-y-4">
+                   <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Background Service (Windows)</h4>
+                   <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Run the bridge as a native Windows Service. No CMD windows, no manual starts. It starts automatically with your PC.</p>
+                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[9px] text-slate-500">
+                     <p className="text-emerald-400 mb-2"># Run this in PowerShell as Admin:</p>
+                     <p>powershell -ExecutionPolicy Bypass -File setup_service.ps1</p>
+                   </div>
+                   <p className="text-[9px] text-slate-500 italic">Uses NSSM for high-reliability service management.</p>
+                 </div>
+
+                 <div className="bg-black/40 p-8 rounded-[2rem] border border-slate-800/50 space-y-4">
+                   <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Hidden Background Task</h4>
+                   <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Don't want a full service? Run the bridge in a hidden background process. No taskbar icon, no visible window.</p>
+                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[9px] text-slate-500">
+                     <p className="text-emerald-400 mb-2"># Double-click this file in the bridge folder:</p>
+                     <p>run_hidden.vbs</p>
+                   </div>
+                   <p className="text-[9px] text-slate-500 italic">Perfect for quick, non-intrusive local development.</p>
+                 </div>
+               </div>
+
+               <div className="bg-emerald-500/5 border border-emerald-500/20 p-6 rounded-2xl">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="text-lg">🚀</span>
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Seamless Integration Active</h4>
+                 </div>
+                 <p className="text-xs text-slate-400/80 leading-relaxed">The OgradyCore Intelligence Node is designed for "Zero-Touch" operation. Once the service is installed, the web app will automatically detect and connect to your SQL bridge whenever it's available.</p>
+               </div>
+            </div>
+
             {/* Knowledge Base Section */}
             <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8">
                <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">🧠 Knowledge Base (Mappings)</h3>
