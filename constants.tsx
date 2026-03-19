@@ -2,7 +2,8 @@
 import React from 'react';
 
 export const CORE_TABLES = [
-  "dbo.v_AI_Omnibus_Forecast_Master",
+  "dbo.v_AI_Omnibus_Forecasting",
+  "dbo.v_AI_Omnibus_Comparison",
   "dbo.v_AI_Stock_Catalog",
   "dbo.v_AI_Sales_Truth",
   "dbo.v_AI_Branch_Trends_5Yr",
@@ -21,10 +22,15 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
-  "dbo.v_AI_Omnibus_Forecast_Master": {
-    description: "OMNIBUS FORECAST MASTER: Every transaction with pre-calculated Momentum (_PrevMonthRev) and Seasonality (_LastYearSameMonthRev). Use for all sales and trend analysis. Handles Delphi Rounding and Fiscal Year logic.",
-    primaryKeys: ["InvoiceNumber", "PLUCode", "SiteID"],
-    fields: ["SiteID", "TranDate", "FiscalYear", "CalMonth", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "BranchName", "SalesRepName", "SalesRepCode", "Quantity", "Revenue", "Cost", "GrossProfit", "_MonthlyRev", "_PrevMonthRev", "_LastYearSameMonthRev", "_RunRate3Month", "SeasonalPerformanceStatus", "MonthlyMomentumStatus"]
+  "dbo.v_AI_Omnibus_Forecasting": {
+    description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes MonthlyRev, PrevMonthRev, LastYearSameMonthRev (Seasonality), and RunRate3Month (Momentum). Use for all future projections.",
+    primaryKeys: ["BranchName", "SalesRepName", "TimeKey"],
+    fields: ["BranchName", "SalesRepName", "TimeKey", "MonthlyRev", "PrevMonthRev", "LastYearSameMonthRev", "RunRate3Month", "MarketTrajectory", "Momentum"]
+  },
+  "dbo.v_AI_Omnibus_Comparison": {
+    description: "COMPARISON ENGINE: Year-over-Year performance analysis. Includes AnnualRev, AnnualQty, PrevYearRev, RevenueVariance, and GrowthPercentage. Use for CEO-level trend comparisons.",
+    primaryKeys: ["BranchName", "SalesRepName", "FiscalYear"],
+    fields: ["BranchName", "SalesRepName", "FiscalYear", "AnnualRev", "AnnualQty", "PrevYearRev", "PrevYearQty", "RevenueVariance", "GrowthPercentage"]
   },
   "dbo.v_AI_Stock_Catalog": {
     description: "STOCK CATALOG: Inventory master with costs, departments, and status. Use for stock analysis.",
@@ -32,9 +38,9 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
     fields: ["SiteID", "StockCode", "ProductName", "MainDepartment", "SubDepartment", "QuantityOnHand", "UnitCost", "ListPrice", "StockStatus", "LastSoldDate", "LastPurchasedDate"]
   },
   "dbo.v_AI_Sales_Truth": {
-    description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes, Sales Reps. Fiscal Year logic applied.",
+    description: "CORE TRUTH ENGINE: The foundation for all other views. Handles Delphi rounding, tax flags, and compound discounts. Includes TimeKey (YYYYMM) for chronological grouping.",
     primaryKeys: ["InvoiceNumber", "PLUCode"],
-    fields: ["SiteID", "TranDate", "FiscalYear", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "CustomerName", "SalesRepName", "NetQty", "NetSalesExclVAT", "NetCost"]
+    fields: ["SiteID", "TranDate", "FiscalYear", "CalYear", "CalMonth", "TimeKey", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "BranchName", "SalesRepName", "NetQty", "Revenue", "NetCost"]
   },
   "dbo.v_AI_Branch_Trends_5Yr": {
     description: "BRANCH TRENDS: Year-over-Year performance comparison for branches and regions.",

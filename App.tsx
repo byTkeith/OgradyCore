@@ -186,7 +186,7 @@ const App: React.FC = () => {
 
                <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 font-mono text-[10px] space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
                  <div className="space-y-2">
-                   <p className="text-emerald-500 font-bold">-- 1. RE-DEPLOY FOUNDATION: v_AI_Sales_Truth</p>
+                   <p className="text-emerald-500 font-bold">-- 1. THE CORE ENGINE: v_AI_Sales_Truth</p>
                    <pre className="text-slate-500 whitespace-pre-wrap">
 {`CREATE OR ALTER VIEW dbo.v_AI_Sales_Truth AS
 WITH LineCalculations AS (
@@ -194,8 +194,8 @@ WITH LineCalculations AS (
         A.ANUMBER AS SiteID,
         A.TRANSACTIONDATE AS TranDate,
         CASE WHEN MONTH(A.TRANSACTIONDATE) < 3 THEN YEAR(A.TRANSACTIONDATE) - 1 ELSE YEAR(A.TRANSACTIONDATE) END AS FiscalYear,
-        MONTH(A.TRANSACTIONDATE) AS CalMonth,
         YEAR(A.TRANSACTIONDATE) AS CalYear,
+        MONTH(A.TRANSACTIONDATE) AS CalMonth,
         A.TransactionNumber AS InvoiceNumber,
         A.PLUCode,
         A.Description AS ProductName,
@@ -218,6 +218,7 @@ SELECT
     B.FiscalYear,
     B.CalYear,
     B.CalMonth,
+    (B.CalYear * 100) + B.CalMonth AS TimeKey,
     B.InvoiceNumber,
     B.PLUCode,
     B.ProductName,
@@ -237,40 +238,73 @@ WHERE B.Multiplier <> 0;`}
                  </div>
 
                  <div className="space-y-2 pt-4 border-t border-slate-800">
-                   <p className="text-emerald-500 font-bold">-- 2. RE-DEPLOY MASTER: v_AI_Omnibus_Forecast_Master</p>
+                   <p className="text-emerald-500 font-bold">-- 2. TREND & COMPARISON: v_AI_Omnibus_Comparison</p>
                    <pre className="text-slate-500 whitespace-pre-wrap">
-{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Forecast_Master AS
-WITH MonthlyContext AS (
+{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Comparison AS
+WITH AnnualStats AS (
     SELECT 
-        AccountCode, SiteID, ProductName, PackSize, 
-        (FiscalYear * 100) + CalMonth AS TimeKey,
-        SUM(Revenue) AS _MonthlyRev,
-        LAG(SUM(Revenue), 1) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth) AS _PrevMonthRev,
-        LAG(SUM(Revenue), 12) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth) AS _LastYearSameMonthRev,
-        AVG(SUM(Revenue)) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS _RunRate3Month
+        BranchName,
+        SalesRepName,
+        FiscalYear,
+        SUM(Revenue) AS AnnualRev,
+        SUM(NetQty) AS AnnualQty
     FROM dbo.v_AI_Sales_Truth
-    GROUP BY AccountCode, SiteID, ProductName, PackSize, FiscalYear, CalMonth
+    GROUP BY BranchName, SalesRepName, FiscalYear
 )
 SELECT 
-    M.*,
-    CAST(ISNULL(C._PrevMonthRev, 0) AS DECIMAL(18,2)) AS PrevMonthTotalRevenue,
-    CAST(ISNULL(C._LastYearSameMonthRev, 0) AS DECIMAL(18,2)) AS SeasonalityReferenceRev,
-    CAST(ISNULL(C._RunRate3Month, 0) AS DECIMAL(18,2)) AS CurrentRevenueRunRate,
+    C.BranchName,
+    C.SalesRepName,
+    C.FiscalYear,
+    C.AnnualRev,
+    C.AnnualQty,
+    P.AnnualRev AS PrevYearRev,
+    P.AnnualQty AS PrevYearQty,
+    (C.AnnualRev - ISNULL(P.AnnualRev, 0)) AS RevenueVariance,
+    CASE WHEN ISNULL(P.AnnualRev, 0) = 0 THEN 100 ELSE ((C.AnnualRev - P.AnnualRev) / P.AnnualRev) * 100 END AS GrowthPercentage
+FROM AnnualStats C
+LEFT JOIN AnnualStats P ON C.BranchName = P.BranchName AND C.SalesRepName = P.SalesRepName AND C.FiscalYear = P.FiscalYear + 1;`}
+                   </pre>
+                 </div>
+
+                 <div className="space-y-2 pt-4 border-t border-slate-800">
+                   <p className="text-emerald-500 font-bold">-- 3. FORECASTING ENGINE: v_AI_Omnibus_Forecasting</p>
+                   <pre className="text-slate-500 whitespace-pre-wrap">
+{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Forecasting AS
+WITH MonthlyContext AS (
+    SELECT 
+        BranchName,
+        SalesRepName,
+        TimeKey,
+        SUM(Revenue) AS MonthlyRev,
+        LAG(SUM(Revenue), 1) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS PrevMonthRev,
+        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS LastYearSameMonthRev,
+        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS RunRate3Month
+    FROM dbo.v_AI_Sales_Truth
+    GROUP BY BranchName, SalesRepName, TimeKey
+)
+SELECT 
+    *,
     CASE 
-        WHEN C._LastYearSameMonthRev IS NULL THEN 'NEW'
-        WHEN M.Revenue < C._LastYearSameMonthRev THEN 'BELOW_SEASONAL_AVG'
-        WHEN M.Revenue > C._LastYearSameMonthRev THEN 'EXCEEDING_SEASONAL_AVG'
+        WHEN LastYearSameMonthRev IS NULL THEN 'NEW'
+        WHEN MonthlyRev < LastYearSameMonthRev THEN 'BELOW_SEASONAL_AVG'
+        WHEN MonthlyRev > LastYearSameMonthRev THEN 'EXCEEDING_SEASONAL_AVG'
         ELSE 'STABLE'
-    END AS SeasonalPerformanceStatus,
+    END AS MarketTrajectory,
     CASE 
-        WHEN C._MonthlyRev < C._PrevMonthRev THEN 'DECLINING_MOMENTUM'
-        ELSE 'GROWING_MOMENTUM'
-    END AS MonthlyMomentumStatus
-FROM dbo.v_AI_Sales_Truth M
-LEFT JOIN MonthlyContext C 
-    ON M.AccountCode = C.AccountCode AND M.SiteID = C.SiteID 
-    AND M.ProductName = C.ProductName AND M.PackSize = C.PackSize 
-    AND ((M.FiscalYear * 100) + M.CalMonth) = C.TimeKey;`}
+        WHEN MonthlyRev < PrevMonthRev THEN 'DECLINING'
+        ELSE 'GROWING'
+    END AS Momentum
+FROM MonthlyContext;`}
+                   </pre>
+                 </div>
+
+                 <div className="space-y-2 pt-4 border-t border-slate-800">
+                   <p className="text-emerald-500 font-bold">-- 4. GRANT PERMISSIONS (42000 FIX)</p>
+                   <pre className="text-slate-500 whitespace-pre-wrap">
+{`GRANT SELECT ON dbo.v_AI_Sales_Truth TO [YourUser];
+GRANT SELECT ON dbo.v_AI_Omnibus_Comparison TO [YourUser];
+GRANT SELECT ON dbo.v_AI_Omnibus_Forecasting TO [YourUser];
+-- Replace [YourUser] with the actual database user used by the OgradyBridge.`}
                    </pre>
                  </div>
                </div>
@@ -278,7 +312,7 @@ LEFT JOIN MonthlyContext C
                <div className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-2xl">
                  <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mb-2">Manual Execution Required</p>
                  <p className="text-xs text-slate-400/80 leading-relaxed">
-                   Copy the SQL above and execute it in your <b>SQL Server Management Studio (SSMS)</b> or preferred SQL tool connected to the <b>UltiSales</b> database. This will expose the <code>CalYear</code> and <code>CalMonth</code> columns required for Five-Nines accuracy.
+                   Copy the SQL above and execute it in your <b>SQL Server Management Studio (SSMS)</b>. This will resolve the <b>42000 SELECT permission denied</b> error by granting the necessary access to the new views.
                  </p>
                </div>
             </div>
