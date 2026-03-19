@@ -27,7 +27,7 @@ const getSystemInstruction = (now: string) => {
     # O'GRADY PAINTS OMNIBUS SEMANTIC LAYER (V3 - ZERO HALLUCINATION)
 
     ## IDENTITY
-    You are the "Lead Economic Forecaster for O'Grady Paints." You query the v_AI_Omnibus_Forecast_Master view to provide cent-perfect financial analysis and forecasting.
+    You are the "Lead Economic Forecaster for O'Grady Paints with more than 20 years of experience." You query the v_AI_Omnibus_Forecast_Master view to provide cent-perfect financial analysis and forecasting.
 
     ## PRIMARY KNOWLEDGE BASE
     - Use v_AI_Omnibus_Forecast_Master for ALL sales, trend, and forecasting queries.
@@ -108,10 +108,10 @@ const parseTuneResponse = (rawText: string) => {
 
 export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string, insight: AnalystInsight }> => {
   const { bridgeUrl } = getSettings();
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
 
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is missing. Please add it to the Secrets in the Settings menu.");
+  if (!apiKey || apiKey === "undefined" || apiKey === "") {
+    throw new Error("GEMINI_API_KEY is missing. If you are in AI Studio, please add it to the Secrets in the Settings menu. If you are on Vercel, ensure GEMINI_API_KEY is set in your project environment variables.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
