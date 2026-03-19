@@ -2,11 +2,11 @@
 import React from 'react';
 
 export const CORE_TABLES = [
-  "dbo.v_AI_Omnibus_Sales_Performance",
+  "dbo.v_AI_Omnibus_Forecast_Master",
+  "dbo.v_AI_Stock_Catalog",
   "dbo.v_AI_Sales_Truth",
   "dbo.v_AI_Branch_Trends_5Yr",
   "dbo.v_AI_Product_Size_Trends",
-  "dbo.v_AI_Stock_Status",
   "dbo.AUDIT", 
   "dbo.STOCK", 
   "dbo.TYPES", 
@@ -21,10 +21,15 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
-  "dbo.v_AI_Omnibus_Sales_Performance": {
-    description: "UNIVERSAL GOD VIEW V2: Every transaction, every identity, every pack size, and pre-calculated trends. Handles Delphi Rounding, Tax Flags, and Compound Discounting. No budget logic; use YoY trends.",
+  "dbo.v_AI_Omnibus_Forecast_Master": {
+    description: "OMNIBUS FORECAST MASTER: Every transaction with pre-calculated Momentum (_PrevMonthRev) and Seasonality (_LastYearSameMonthRev). Use for all sales and trend analysis. Handles Delphi Rounding and Fiscal Year logic.",
     primaryKeys: ["InvoiceNumber", "PLUCode", "SiteID"],
-    fields: ["SiteID", "TranDate", "FiscalYear", "CalMonth", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "TransactionType", "QTY", "COSTPRICEEXCL", "BranchName", "SalesRepName", "SalesRepCode", "Quantity", "Revenue", "Cost", "GrossProfit", "PrevYearRevenue", "PrevYearQuantity", "PerformanceStatus"]
+    fields: ["SiteID", "TranDate", "FiscalYear", "CalMonth", "InvoiceNumber", "PLUCode", "ProductName", "PackSize", "AccountCode", "BranchName", "SalesRepName", "SalesRepCode", "Quantity", "Revenue", "Cost", "GrossProfit", "_MonthlyRev", "_PrevMonthRev", "_LastYearSameMonthRev", "_RunRate3Month", "SeasonalPerformanceStatus", "MonthlyMomentumStatus"]
+  },
+  "dbo.v_AI_Stock_Catalog": {
+    description: "STOCK CATALOG: Inventory master with costs, departments, and status. Use for stock analysis.",
+    primaryKeys: ["StockCode", "SiteID"],
+    fields: ["SiteID", "StockCode", "ProductName", "MainDepartment", "SubDepartment", "QuantityOnHand", "UnitCost", "ListPrice", "StockStatus", "LastSoldDate", "LastPurchasedDate"]
   },
   "dbo.v_AI_Sales_Truth": {
     description: "MASTER ENGINE: Sales, Net Qty, Costs, Customers, Pack Sizes, Sales Reps. Fiscal Year logic applied.",
@@ -40,11 +45,6 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
     description: "PRODUCT TRENDS: Performance by pack size, product, and region over fiscal years.",
     primaryKeys: ["SiteID", "BranchName", "ProductName", "PackSize", "FiscalYear"],
     fields: ["SiteID", "BranchName", "SalesRepName", "ProductName", "PackSize", "FiscalYear", "CurrentYearQty", "CurrentQty", "PreviousYearQty", "PrevQty", "QtyVariance", "CurrentYearRevenue", "CurrentRev", "PreviousYearRevenue", "PrevRev", "RevenueVariance", "ProductTrend"]
-  },
-  "dbo.v_AI_Stock_Status": {
-    description: "INVENTORY VIEW: Stock levels, costs, departments, status.",
-    primaryKeys: ["StockCode", "SiteID"],
-    fields: ["SiteID", "StockCode", "ProductName", "MainDepartment", "SubDepartment", "QuantityOnHand", "UnitCost", "ListPrice", "StockStatus", "LastSoldDate", "LastPurchasedDate"]
   },
   "dbo.AUDIT": {
     description: "Main transaction ledger. Join to STOCK on Description+ANUMBER due to barcode inconsistency.",
