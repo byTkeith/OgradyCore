@@ -173,6 +173,116 @@ const App: React.FC = () => {
               )}
             </div>
 
+            {/* SQL Deployment Section */}
+            <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8">
+               <div className="flex items-center justify-between">
+                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">🛠️ SQL Foundation Fix (V4)</h3>
+                 <span className="px-3 py-1 bg-amber-500/10 text-amber-500 text-[8px] font-black uppercase rounded-full border border-amber-500/20">Architect Override Required</span>
+               </div>
+               
+               <p className="text-xs text-slate-400 leading-relaxed">
+                 To resolve the <b>42S22 projection gap</b> and enable Five-Nines accuracy, the foundation views must be re-deployed with exposed time columns.
+               </p>
+
+               <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 font-mono text-[10px] space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
+                 <div className="space-y-2">
+                   <p className="text-emerald-500 font-bold">-- 1. RE-DEPLOY FOUNDATION: v_AI_Sales_Truth</p>
+                   <pre className="text-slate-500 whitespace-pre-wrap">
+{`CREATE OR ALTER VIEW dbo.v_AI_Sales_Truth AS
+WITH LineCalculations AS (
+    SELECT 
+        A.ANUMBER AS SiteID,
+        A.TRANSACTIONDATE AS TranDate,
+        CASE WHEN MONTH(A.TRANSACTIONDATE) < 3 THEN YEAR(A.TRANSACTIONDATE) - 1 ELSE YEAR(A.TRANSACTIONDATE) END AS FiscalYear,
+        MONTH(A.TRANSACTIONDATE) AS CalMonth,
+        YEAR(A.TRANSACTIONDATE) AS CalYear,
+        A.TransactionNumber AS InvoiceNumber,
+        A.PLUCode,
+        A.Description AS ProductName,
+        A.Description2 AS PackSize,
+        LTRIM(RTRIM(A.DebtorOrCreditorNumber)) AS AccountCode,
+        A.TransactionType,
+        A.QTY,
+        A.COSTPRICEEXCL,
+        FLOOR((A.RETAILPRICEEXCL * 100) + 0.501) / 100.0 AS _RoundedPrice,
+        (1 - ISNULL(A.LINEDISCOUNTPERC,0)/100.0) AS _LineMult,
+        (1 - (CASE WHEN A.TAXVALUE < 0 THEN 0 ELSE A.HEADDISCOUNTPERC END)/100.0) AS _HeadMult,
+        CAST(ISNULL(A.ROUNDVALUE, 0) AS FLOAT) / 100.0 AS _RoundAdj,
+        CASE WHEN A.TransactionType IN ('66','67','68','70') THEN 1 
+             WHEN A.TransactionType IN ('81','89','97','98') THEN -1 ELSE 0 END AS Multiplier
+    FROM dbo.AUDIT A
+)
+SELECT 
+    B.SiteID,
+    B.TranDate,
+    B.FiscalYear,
+    B.CalYear,
+    B.CalMonth,
+    B.InvoiceNumber,
+    B.PLUCode,
+    B.ProductName,
+    B.PackSize,
+    B.AccountCode,
+    ISNULL(D.Surname, 'Cash Sale') AS BranchName,
+    ISNULL(T_Rep.TYPE_DESCRIPTION, 'No Rep Assigned') AS SalesRepName,
+    (B.QTY * B.Multiplier) AS NetQty,
+    ROUND((((B._RoundedPrice * B._LineMult * B._HeadMult * B.QTY) - B._RoundAdj) * B.Multiplier), 2) AS Revenue,
+    ROUND((B.COSTPRICEEXCL * B.QTY * B.Multiplier), 2) AS NetCost
+FROM LineCalculations B
+LEFT JOIN dbo.DEBTOR D ON B.AccountCode = LTRIM(RTRIM(D.Number)) AND B.SiteID = D.ANUMBER
+LEFT JOIN dbo.TYPES T_Rep ON CAST(D.SalesRep AS VARCHAR) = T_Rep.TYPE_ID 
+    AND T_Rep.TABLE_NAME = 'DEBTOR' AND T_Rep.TYPE_NAME = 'SALESREP'
+WHERE B.Multiplier <> 0;`}
+                   </pre>
+                 </div>
+
+                 <div className="space-y-2 pt-4 border-t border-slate-800">
+                   <p className="text-emerald-500 font-bold">-- 2. RE-DEPLOY MASTER: v_AI_Omnibus_Forecast_Master</p>
+                   <pre className="text-slate-500 whitespace-pre-wrap">
+{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Forecast_Master AS
+WITH MonthlyContext AS (
+    SELECT 
+        AccountCode, SiteID, ProductName, PackSize, 
+        (FiscalYear * 100) + CalMonth AS TimeKey,
+        SUM(Revenue) AS _MonthlyRev,
+        LAG(SUM(Revenue), 1) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth) AS _PrevMonthRev,
+        LAG(SUM(Revenue), 12) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth) AS _LastYearSameMonthRev,
+        AVG(SUM(Revenue)) OVER (PARTITION BY AccountCode, SiteID, ProductName, PackSize ORDER BY (FiscalYear * 100) + CalMonth ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS _RunRate3Month
+    FROM dbo.v_AI_Sales_Truth
+    GROUP BY AccountCode, SiteID, ProductName, PackSize, FiscalYear, CalMonth
+)
+SELECT 
+    M.*,
+    CAST(ISNULL(C._PrevMonthRev, 0) AS DECIMAL(18,2)) AS PrevMonthTotalRevenue,
+    CAST(ISNULL(C._LastYearSameMonthRev, 0) AS DECIMAL(18,2)) AS SeasonalityReferenceRev,
+    CAST(ISNULL(C._RunRate3Month, 0) AS DECIMAL(18,2)) AS CurrentRevenueRunRate,
+    CASE 
+        WHEN C._LastYearSameMonthRev IS NULL THEN 'NEW'
+        WHEN M.Revenue < C._LastYearSameMonthRev THEN 'BELOW_SEASONAL_AVG'
+        WHEN M.Revenue > C._LastYearSameMonthRev THEN 'EXCEEDING_SEASONAL_AVG'
+        ELSE 'STABLE'
+    END AS SeasonalPerformanceStatus,
+    CASE 
+        WHEN C._MonthlyRev < C._PrevMonthRev THEN 'DECLINING_MOMENTUM'
+        ELSE 'GROWING_MOMENTUM'
+    END AS MonthlyMomentumStatus
+FROM dbo.v_AI_Sales_Truth M
+LEFT JOIN MonthlyContext C 
+    ON M.AccountCode = C.AccountCode AND M.SiteID = C.SiteID 
+    AND M.ProductName = C.ProductName AND M.PackSize = C.PackSize 
+    AND ((M.FiscalYear * 100) + M.CalMonth) = C.TimeKey;`}
+                   </pre>
+                 </div>
+               </div>
+
+               <div className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-2xl">
+                 <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mb-2">Manual Execution Required</p>
+                 <p className="text-xs text-slate-400/80 leading-relaxed">
+                   Copy the SQL above and execute it in your <b>SQL Server Management Studio (SSMS)</b> or preferred SQL tool connected to the <b>UltiSales</b> database. This will expose the <code>CalYear</code> and <code>CalMonth</code> columns required for Five-Nines accuracy.
+                 </p>
+               </div>
+            </div>
+
             {/* Service Management Section */}
             <div className="bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8">
                <div className="flex items-center justify-between">
