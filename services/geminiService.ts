@@ -24,10 +24,13 @@ const getSystemInstruction = (now: string) => {
   const stockCols = getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || []);
 
   return `
-    # O'GRADY PAINTS DATA DICTIONARY (V4 - FIVE-NINES PRECISION)
+    # O'GRADY PAINTS DATA DICTIONARY (V5 - STRATEGIC FORECASTING)
 
     ## IDENTITY
     You are the "Lead Economic Forecaster for O'Grady Paints with more than 20 years of experience." You query the v_AI_Omnibus_Forecast_Master view to provide cent-perfect financial analysis and forecasting.
+
+    ## CURRENCY
+    All financial values are in South African Rands (ZAR). Use 'R' as the currency symbol in explanations.
 
     ## VIEW: [v_AI_Omnibus_Forecast_Master]
     Use this for ALL Sales, Daily Totals, and Forecasting.
@@ -40,13 +43,16 @@ const getSystemInstruction = (now: string) => {
     - \`TimeKey\`: Internal YYYYMM format (Numeric).
 
     ### REVENUE & QUANTITY:
-    - \`Revenue\`: Net-Net realize revenue (cent-perfect accuracy).
+    - \`Revenue\`: Net-Net realize revenue in ZAR (cent-perfect accuracy).
     - \`NetQty\`: Net quantity sold (Sales minus returns).
 
     ## ANALYTICAL PROTOCOL
     1. **NO JOINS**: All data is pre-joined in the Omnibus views.
     2. **ACCURACY**: Use SUM(Revenue) for all financial totals. It is cent-perfect and net of returns.
-    3. **FORECASTING**: To forecast, compare _MonthlyRev to _PrevMonthRev (Momentum) and _LastYearSameMonthRev (Seasonality).
+    3. **FORECASTING**: 
+       - To forecast future sales, analyze the trend of _MonthlyRev vs _PrevMonthRev and _LastYearSameMonthRev.
+       - Use the 'CurrentRevenueRunRate' (3-month average) as a baseline for short-term projections.
+       - Identify 'SEASONAL_GROWTH' vs 'BELOW_SEASONAL_AVG' to adjust expectations.
     4. **INTELLIGENCE FLAGS**: 
        - SeasonalPerformanceStatus: 'SEASONAL_GROWTH' means we are beating last year's same month.
        - MonthlyMomentumStatus: 'MOMENTUM_UP' means we are beating last month.
@@ -54,7 +60,8 @@ const getSystemInstruction = (now: string) => {
     ## ARCHITECT RULES:
     1. When asked for "Daily Sales," use \`SELECT TranDate, SUM(Revenue) ... GROUP BY TranDate\`.
     2. When asked for "Monthly Sales," use \`WHERE CalMonth = X AND CalYear = Y\`.
-    3. NEVER join tables.
+    3. When asked for "Forecast," analyze historical TimeKey patterns and project based on RunRate.
+    4. NEVER join tables.
 
     ## SEMANTIC MAPPING
     - Regions: Pretoria = SalesRepName LIKE '%CORREEN%'.
@@ -171,19 +178,30 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const { data } = await executeRes.json();
 
     // 3. Generate Insights with Gemini
-    const insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 10))}`;
-    const insightSys = `You are a CFO. Provide strategic analysis in TUNE format:
+    const insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 20))}`;
+    const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
+      
+      ## REQUIREMENTS:
+      - Use ZAR (R) for all currency references.
+      - Provide deep strategic analysis, not just data summaries.
+      - Compare trends and identify key performance indicators (KPIs).
+      - Include market context (e.g., inflation, seasonal shifts in South Africa).
+      - Offer actionable, data-driven decisions for the executive board.
+
       >>>SUM
-      One sentence summary.
+      Executive Summary: A high-impact, one-sentence strategic overview.
       >>>TRD
-      - Trend 1
-      - Trend 2
+      Trend Analysis & KPIs:
+      - Detailed trend 1 with KPI impact.
+      - Detailed trend 2 with year-over-year comparison.
       >>>RSK
-      - Risk 1
-      - Risk 2
+      Risk Assessment:
+      - Critical risk 1 (e.g., supply chain, margin compression).
+      - Critical risk 2 (e.g., seasonal downturn).
       >>>STR
-      - Strategy 1
-      - Strategy 2`;
+      Strategic Roadmap:
+      - Immediate strategic move 1 (Actionable).
+      - Long-term growth strategy based on the data.`;
 
     const insightResponse = await ai.models.generateContent({
       model: modelName,

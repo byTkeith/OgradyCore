@@ -44,7 +44,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
 
   const formatVal = (val: any) => {
     if (typeof val === 'number') {
-        return val.toLocaleString(undefined, { 
+        return 'R ' + val.toLocaleString(undefined, { 
             minimumFractionDigits: 2, 
             maximumFractionDigits: 2 
         });
