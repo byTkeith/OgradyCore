@@ -221,12 +221,12 @@ WITH LineCalculations AS (
         A.Description2 AS PackSize,
         LTRIM(RTRIM(A.DebtorOrCreditorNumber)) AS AccountCode,
         A.TransactionType,
-        A.QTY,
-        A.COSTPRICEEXCL,
-        FLOOR((A.RETAILPRICEEXCL * 100) + 0.501) / 100.0 AS _RoundedPrice,
-        (1 - ISNULL(A.LINEDISCOUNTPERC,0)/100.0) AS _LineMult,
-        (1 - (CASE WHEN A.TAXVALUE < 0 THEN 0 ELSE A.HEADDISCOUNTPERC END)/100.0) AS _HeadMult,
-        CAST(ISNULL(A.ROUNDVALUE, 0) AS FLOAT) / 100.0 AS _RoundAdj,
+        CAST(A.QTY AS DECIMAL(38,4)) AS QTY,
+        CAST(A.COSTPRICEEXCL AS DECIMAL(38,4)) AS COSTPRICEEXCL,
+        FLOOR((CAST(A.RETAILPRICEEXCL AS DECIMAL(38,4)) * 100) + 0.501) / 100.0 AS _RoundedPrice,
+        (1 - CAST(ISNULL(A.LINEDISCOUNTPERC,0) AS DECIMAL(38,4))/100.0) AS _LineMult,
+        (1 - (CASE WHEN A.TAXVALUE < 0 THEN 0 ELSE CAST(ISNULL(A.HEADDISCOUNTPERC,0) AS DECIMAL(38,4)) END)/100.0) AS _HeadMult,
+        CAST(ISNULL(A.ROUNDVALUE, 0) AS DECIMAL(38,4)) / 100.0 AS _RoundAdj,
         CASE WHEN A.TransactionType IN ('66','67','68','70') THEN 1 
              WHEN A.TransactionType IN ('81','89','97','98') THEN -1 ELSE 0 END AS Multiplier
     FROM dbo.AUDIT A
@@ -246,8 +246,8 @@ SELECT
     ISNULL(D.Surname, 'Cash Sale') AS BranchName,
     ISNULL(T_Rep.TYPE_DESCRIPTION, 'No Rep Assigned') AS SalesRepName,
     (B.QTY * B.Multiplier) AS NetQty,
-    ROUND((((B._RoundedPrice * B._LineMult * B._HeadMult * B.QTY) - B._RoundAdj) * B.Multiplier), 2) AS Revenue,
-    ROUND((B.COSTPRICEEXCL * B.QTY * B.Multiplier), 2) AS NetCost
+    CAST(ROUND((((B._RoundedPrice * B._LineMult * B._HeadMult * B.QTY) - B._RoundAdj) * B.Multiplier), 2) AS DECIMAL(38,2)) AS Revenue,
+    CAST(ROUND((B.COSTPRICEEXCL * B.QTY * B.Multiplier), 2) AS DECIMAL(38,2)) AS NetCost
 FROM LineCalculations B
 LEFT JOIN dbo.DEBTOR D ON B.AccountCode = LTRIM(RTRIM(D.Number)) AND B.SiteID = D.ANUMBER
 LEFT JOIN dbo.TYPES T_Rep ON CAST(D.SalesRep AS VARCHAR) = T_Rep.TYPE_ID 
