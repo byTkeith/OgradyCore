@@ -137,7 +137,18 @@ const App: React.FC = () => {
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Active Endpoint</h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => {
+                          const baseUrl = (bridgeUrl || "").replace(/\/$/, "");
+                          const endpoint = baseUrl ? `${baseUrl}/api/refresh_schema` : '/api/refresh_schema';
+                          fetch(endpoint, { method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' } })
+                            .then(() => checkConnection(bridgeUrl));
+                        }}
+                        className="text-[8px] font-black text-emerald-500 hover:text-emerald-400 uppercase border border-emerald-500/20 px-2 py-0.5 rounded transition-colors bg-emerald-500/5"
+                      >
+                        🔄 Refresh Schema
+                      </button>
                       {connStatus === 'offline' && (
                         <a 
                           href={bridgeUrl} 
@@ -178,6 +189,14 @@ const App: React.FC = () => {
                <div className="flex items-center justify-between">
                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">🛠️ SQL Foundation Fix (V4)</h3>
                  <span className="px-3 py-1 bg-amber-500/10 text-amber-500 text-[8px] font-black uppercase rounded-full border border-amber-500/20">Architect Override Required</span>
+               </div>
+
+               <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl">
+                 <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">⚠️ Critical Fix for "Invalid Column Name" Errors</p>
+                 <p className="text-rose-400 text-[10px] leading-relaxed">
+                   If you see errors like <code className="bg-rose-500/20 px-1 rounded">Invalid column name 'PrevYearRev'</code>, it means your database views are out of sync. 
+                   Please <strong>re-run all scripts below</strong> in your SQL Server Management Studio (SSMS) to ensure the latest CEO Semantic Layer is active.
+                 </p>
                </div>
                
                <p className="text-xs text-slate-400 leading-relaxed">
