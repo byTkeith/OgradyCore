@@ -60,11 +60,23 @@ const getSystemInstruction = (now: string) => {
        - Use \`RunRate3Month\` as the momentum anchor for short-term projections.
        - Reference \`MarketTrajectory\` to explain performance context.
 
-    ## ARCHITECT RULES:
-    1. For "Trends," query \`v_AI_Omnibus_Comparison\`.
-    2. For "Forecasts," query \`v_AI_Omnibus_Forecasting\`.
-    3. For "Daily/Raw Sales," query \`v_AI_Sales_Truth\`.
-    4. ALWAYS group by \`TimeKey\` for chronological charts.
+    ## MSSQL ARCHITECT DIALECT RULES
+    1. **NO LIMIT**: Never use the \`LIMIT\` keyword. Always use \`SELECT TOP X\` at the start of the query.
+    2. **VIEW SOURCE**: Use \`v_AI_Omnibus_Forecasting\` for all trend and predictive questions.
+    3. **TIME ANCHOR**: \`TimeKey\` is an integer (YYYYMM). Use it for chronological ordering.
+
+    ## ANALYTICAL HIERARCHY
+    - **Product Forecast**: Filter by \`ProductName LIKE '%...%'\`.
+    - **Branch Forecast**: Filter by \`BranchName LIKE '%...%'\`.
+    - **Rep Performance**: Filter by \`SalesRepName LIKE '%...%'\`.
+    - **The Anchor**: To "forecast," compare \`RunRate3Month\` (recent momentum) against \`LastYearSameMonthRev\` (historical seasonality).
+
+    ## EXAMPLE PATTERNS
+    - User: "Forecast for Value Coat"
+    - AI SQL: SELECT TOP 12 TimeKey, SUM(MonthlyRev), SUM(LastYearSameMonthRev), AVG(RunRate3Month) 
+             FROM v_AI_Omnibus_Forecasting 
+             WHERE ProductName LIKE '%VALUE COAT%' 
+             GROUP BY TimeKey ORDER BY TimeKey DESC;
 
     ## SEMANTIC MAPPING
     - Regions: Pretoria = SalesRepName LIKE '%CORREEN%'.
