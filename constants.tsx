@@ -24,13 +24,13 @@ export const SALES_TRANSACTION_TYPES = [
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.v_AI_Omnibus_Forecast_Master": {
     description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes MonthlyRevenue, PrevMonthRev, SeasonalityReferenceRev (Seasonality), and CurrentRevenueRunRate (Momentum). Use for all future projections.",
-    primaryKeys: ["BranchName", "SalesRepName", "TimeKey"],
-    fields: ["BranchName", "SalesRepName", "TimeKey", "MonthlyRevenue", "PrevMonthRev", "SeasonalityReferenceRev", "CurrentRevenueRunRate", "PerformanceStatus", "Momentum"]
+    primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],
+    fields: ["BranchName", "SalesRepName", "ProductName", "TimeKey", "MonthlyRevenue", "PrevMonthRev", "SeasonalityReferenceRev", "CurrentRevenueRunRate", "PerformanceStatus", "Momentum"]
   },
   "dbo.v_AI_Omnibus_Comparison": {
     description: "COMPARISON ENGINE: Year-over-Year performance analysis. Includes AnnualRev, AnnualQty, PrevYearRev, RevenueVariance, and GrowthPercentage. Use for CEO-level trend comparisons.",
-    primaryKeys: ["BranchName", "SalesRepName", "FiscalYear"],
-    fields: ["BranchName", "SalesRepName", "FiscalYear", "AnnualRev", "AnnualQty", "PrevYearRev", "PrevYearQty", "RevenueVariance", "GrowthPercentage"]
+    primaryKeys: ["BranchName", "SalesRepName", "ProductName", "FiscalYear"],
+    fields: ["BranchName", "SalesRepName", "ProductName", "FiscalYear", "AnnualRev", "AnnualQty", "PrevYearRev", "PrevYearQty", "RevenueVariance", "GrowthPercentage"]
   },
   "dbo.v_AI_Stock_Catalog": {
     description: "STOCK CATALOG: Inventory master with costs, departments, and status. Use for stock analysis.",

@@ -227,7 +227,7 @@ WITH LineCalculations AS (
         (1 - CAST(ISNULL(A.LINEDISCOUNTPERC,0) AS DECIMAL(38,4))/100.0) AS _LineMult,
         (1 - (CASE WHEN A.TAXVALUE < 0 THEN 0 ELSE CAST(ISNULL(A.HEADDISCOUNTPERC,0) AS DECIMAL(38,4)) END)/100.0) AS _HeadMult,
         CAST(ISNULL(A.ROUNDVALUE, 0) AS DECIMAL(38,4)) / 100.0 AS _RoundAdj,
-        CASE WHEN A.TransactionType IN ('66','67','68','70') THEN 1 
+        CASE WHEN A.TransactionType IN ('57','66','67','68','70') THEN 1 
              WHEN A.TransactionType IN ('81','89','97','98') THEN -1 ELSE 0 END AS Multiplier
     FROM dbo.AUDIT A
 )
@@ -264,15 +264,17 @@ WITH AnnualStats AS (
     SELECT 
         BranchName,
         SalesRepName,
+        ProductName,
         FiscalYear,
         SUM(Revenue) AS AnnualRev,
         SUM(NetQty) AS AnnualQty
     FROM dbo.v_AI_Sales_Truth
-    GROUP BY BranchName, SalesRepName, FiscalYear
+    GROUP BY BranchName, SalesRepName, ProductName, FiscalYear
 )
 SELECT 
     C.BranchName,
     C.SalesRepName,
+    C.ProductName,
     C.FiscalYear,
     C.AnnualRev,
     C.AnnualQty,
@@ -281,7 +283,7 @@ SELECT
     (C.AnnualRev - ISNULL(P.AnnualRev, 0)) AS RevenueVariance,
     CASE WHEN ISNULL(P.AnnualRev, 0) = 0 THEN 100 ELSE ((C.AnnualRev - P.AnnualRev) / P.AnnualRev) * 100 END AS GrowthPercentage
 FROM AnnualStats C
-LEFT JOIN AnnualStats P ON C.BranchName = P.BranchName AND C.SalesRepName = P.SalesRepName AND C.FiscalYear = P.FiscalYear + 1;`}
+LEFT JOIN AnnualStats P ON C.BranchName = P.BranchName AND C.SalesRepName = P.SalesRepName AND C.ProductName = P.ProductName AND C.FiscalYear = P.FiscalYear + 1;`}
                    </pre>
                  </div>
 
@@ -293,16 +295,24 @@ WITH MonthlyContext AS (
     SELECT 
         BranchName,
         SalesRepName,
+        ProductName,
         TimeKey,
         SUM(Revenue) AS MonthlyRevenue,
-        LAG(SUM(Revenue), 1) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS PrevMonthRev,
-        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS SeasonalityReferenceRev,
-        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS CurrentRevenueRunRate
+        LAG(SUM(Revenue), 1) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey) AS PrevMonthRev,
+        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey) AS SeasonalityReferenceRev,
+        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS CurrentRevenueRunRate
     FROM dbo.v_AI_Sales_Truth
-    GROUP BY BranchName, SalesRepName, TimeKey
+    GROUP BY BranchName, SalesRepName, ProductName, TimeKey
 )
 SELECT 
-    *,
+    BranchName,
+    SalesRepName,
+    ProductName,
+    TimeKey,
+    MonthlyRevenue,
+    PrevMonthRev,
+    SeasonalityReferenceRev,
+    CurrentRevenueRunRate,
     CASE 
         WHEN SeasonalityReferenceRev IS NULL THEN 'NEW'
         WHEN MonthlyRevenue < SeasonalityReferenceRev THEN 'BELOW_SEASONAL_AVG'
