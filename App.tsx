@@ -298,9 +298,10 @@ WITH MonthlyContext AS (
         ProductName,
         TimeKey,
         SUM(Revenue) AS MonthlyRevenue,
+        SUM(NetQty) AS MonthlyQty,
         LAG(SUM(Revenue), 1) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey) AS PrevMonthRev,
-        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey) AS SeasonalityReferenceRev,
-        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS CurrentRevenueRunRate
+        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey) AS LastYearRevenue,
+        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName, ProductName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS ProjectedRunRate
     FROM dbo.v_AI_Sales_Truth
     GROUP BY BranchName, SalesRepName, ProductName, TimeKey
 )
@@ -310,13 +311,14 @@ SELECT
     ProductName,
     TimeKey,
     MonthlyRevenue,
+    MonthlyQty,
     PrevMonthRev,
-    SeasonalityReferenceRev,
-    CurrentRevenueRunRate,
+    LastYearRevenue,
+    ProjectedRunRate,
     CASE 
-        WHEN SeasonalityReferenceRev IS NULL THEN 'NEW'
-        WHEN MonthlyRevenue < SeasonalityReferenceRev THEN 'BELOW_SEASONAL_AVG'
-        WHEN MonthlyRevenue > SeasonalityReferenceRev THEN 'EXCEEDING_SEASONAL_AVG'
+        WHEN LastYearRevenue IS NULL THEN 'NEW'
+        WHEN MonthlyRevenue < LastYearRevenue THEN 'BELOW_SEASONAL_AVG'
+        WHEN MonthlyRevenue > LastYearRevenue THEN 'EXCEEDING_SEASONAL_AVG'
         ELSE 'STABLE'
     END AS PerformanceStatus,
     CASE 
