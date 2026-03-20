@@ -315,16 +315,18 @@ SELECT
     PrevMonthRev,
     LastYearRevenue,
     ProjectedRunRate,
+    (MonthlyRevenue - ISNULL(PrevMonthRev, 0)) AS Momentum,
+    CASE 
+        WHEN MonthlyRevenue > PrevMonthRev THEN 'IMPROVING'
+        WHEN MonthlyRevenue < PrevMonthRev THEN 'DECLINING'
+        ELSE 'STABLE'
+    END AS MomentumStatus,
     CASE 
         WHEN LastYearRevenue IS NULL THEN 'NEW'
         WHEN MonthlyRevenue < LastYearRevenue THEN 'BELOW_SEASONAL_AVG'
         WHEN MonthlyRevenue > LastYearRevenue THEN 'EXCEEDING_SEASONAL_AVG'
         ELSE 'STABLE'
-    END AS PerformanceStatus,
-    CASE 
-        WHEN MonthlyRevenue < PrevMonthRev THEN 'DECLINING'
-        ELSE 'GROWING'
-    END AS Momentum
+    END AS PerformanceStatus
 FROM MonthlyContext;`}
                    </pre>
                  </div>
