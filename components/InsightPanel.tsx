@@ -4,9 +4,10 @@ import { AnalystInsight } from '../types';
 
 interface InsightPanelProps {
   insight: AnalystInsight;
+  onExportPDF?: () => void;
 }
 
-const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
+const InsightPanel: React.FC<InsightPanelProps> = ({ insight, onExportPDF }) => {
   // Utility to safely render text even if AI returns an object (fixes React Error #31)
   const renderSafe = (val: any): string => {
     if (val === null || val === undefined) return '';
@@ -31,6 +32,14 @@ const InsightPanel: React.FC<InsightPanelProps> = ({ insight }) => {
             <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Executive Intelligence</h3>
             <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em]">OgradyCore Strategy Engine</p>
           </div>
+          {onExportPDF && (
+            <button 
+              onClick={onExportPDF}
+              className="ml-auto flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 px-4 py-2 rounded-lg border border-emerald-500/20 transition-all"
+            >
+              <span>📄</span> Export PDF
+            </button>
+          )}
         </div>
         
         <div className="relative mb-12">

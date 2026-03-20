@@ -215,9 +215,23 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full max-w-6xl mx-auto md:px-6 md:py-8 overflow-hidden bg-slate-950">
       <div className="flex items-center justify-between px-4 mb-4">
-        <div>
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter">Executive Analyst</h2>
-          <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">OgradyCore Intelligence Node</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Executive Analyst</h2>
+            <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">OgradyCore Intelligence Node</p>
+          </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full flex items-center gap-2">
+            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">PDF Export Active</span>
+            <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
+          </div>
+          {results.length > 0 && (
+            <button 
+              onClick={() => handleDownloadPDF(results.length - 1, results[results.length - 1].query)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase px-4 py-1.5 rounded-full shadow-lg transition-all flex items-center gap-2"
+            >
+              <span>📄</span> Export Latest Analysis
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,24 +262,24 @@ const ChatInterface: React.FC = () => {
           <div 
             key={idx} 
             ref={el => { resultRefs.current[idx] = el; }}
-            className="space-y-10 animate-in fade-in slide-in-from-bottom-4 p-4 rounded-[2.5rem] bg-slate-950"
+            className="space-y-10 animate-in fade-in slide-in-from-bottom-4 p-8 rounded-[3rem] bg-slate-900/30 border border-slate-800/50 shadow-inner"
           >
-            <div className="flex justify-between items-start gap-4">
-              <div className="flex-1"></div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none shadow-lg font-bold border border-slate-700">
-                  {item.query}
-                </div>
-                <button 
-                  onClick={() => handleDownloadPDF(idx, item.query)}
-                  className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-500 hover:text-emerald-400 transition-colors bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20"
-                >
-                  <span>📥</span> Download PDF Report
-                </button>
+            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+              <div className="bg-slate-800 text-white px-8 py-5 rounded-[2rem] rounded-tr-none shadow-2xl font-black text-lg border border-slate-700 max-w-[95%] md:max-w-[80%] tracking-tight">
+                {item.query}
               </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadPDF(idx, item.query);
+                }}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all active:scale-95 border-2 border-white/20 whitespace-nowrap"
+              >
+                <span>📄</span> EXPORT PDF
+              </button>
             </div>
             
-            <div className="space-y-8 md:pl-10">
+            <div className="space-y-12 md:pl-12">
               {item.result.sql && (
                 <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-[2rem]">
                   <div className="flex justify-between items-center mb-4">
@@ -280,7 +294,18 @@ const ChatInterface: React.FC = () => {
                 <>
                   <SummaryTable data={item.result.data} xAxis={item.result.xAxis} yAxis={item.result.yAxis} />
                   <Visualizer result={item.result} />
-                  <InsightPanel insight={item.insight} />
+                  <div className="flex justify-center mt-8">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadPDF(idx, item.query);
+                      }}
+                      className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-white bg-emerald-500/5 hover:bg-emerald-500 px-8 py-3 rounded-full shadow-xl transition-all transform hover:scale-105 border border-emerald-500/20"
+                    >
+                      <span>📥</span> Generate Full Report PDF
+                    </button>
+                  </div>
+                  <InsightPanel insight={item.insight} onExportPDF={() => handleDownloadPDF(idx, item.query)} />
                 </>
               ) : (
                 <div className="space-y-6">
@@ -289,7 +314,7 @@ const ChatInterface: React.FC = () => {
                       Pipeline executed successfully, but zero matching records were found in the database.
                     </div>
                   )}
-                  <InsightPanel insight={item.insight} />
+                  <InsightPanel insight={item.insight} onExportPDF={() => handleDownloadPDF(idx, item.query)} />
                 </div>
               )}
             </div>
