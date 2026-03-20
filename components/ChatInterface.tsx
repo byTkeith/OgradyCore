@@ -4,6 +4,8 @@ import { analyzeQuery } from '../services/geminiService';
 import { QueryResult, AnalystInsight } from '../types';
 import Visualizer from './Visualizer';
 import InsightPanel from './InsightPanel';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({ data, xAxis, yAxis }) => {
   if (!data || data.length === 0) return (
@@ -128,6 +130,55 @@ const ChatInterface: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; result: QueryResult; insight: AnalystInsight; engine: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const resultRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const handleDownloadPDF = async (index: number, query: string) => {
+    const element = resultRefs.current[index];
+    if (!element) return;
+
+    try {
+      // Create a canvas from the element
+      const canvas = await html2canvas(element, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        backgroundColor: '#020617', // Match slate-950
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Calculate dimensions for A4
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      const imgWidth = pageWidth - 20; // 10mm margin on each side
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10; // 10mm top margin
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add extra pages if needed
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const fileName = `Report_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+      pdf.save(fileName);
+    } catch (err) {
+      console.error("PDF Generation Error:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -194,10 +245,23 @@ const ChatInterface: React.FC = () => {
         )}
 
         {results.map((item, idx) => (
-          <div key={idx} className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex justify-end">
-              <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none max-w-[80%] shadow-lg font-bold border border-slate-700">
-                {item.query}
+          <div 
+            key={idx} 
+            ref={el => { resultRefs.current[idx] = el; }}
+            className="space-y-10 animate-in fade-in slide-in-from-bottom-4 p-4 rounded-[2.5rem] bg-slate-950"
+          >
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex-1"></div>
+              <div className="flex flex-col items-end gap-2">
+                <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none shadow-lg font-bold border border-slate-700">
+                  {item.query}
+                </div>
+                <button 
+                  onClick={() => handleDownloadPDF(idx, item.query)}
+                  className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-500 hover:text-emerald-400 transition-colors bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20"
+                >
+                  <span>📥</span> Download PDF Report
+                </button>
               </div>
             </div>
             
