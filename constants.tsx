@@ -2,7 +2,7 @@
 import React from 'react';
 
 export const CORE_TABLES = [
-  "dbo.v_AI_Omnibus_Forecasting",
+  "dbo.v_AI_Omnibus_Forecast_Master",
   "dbo.v_AI_Omnibus_Comparison",
   "dbo.v_AI_Stock_Catalog",
   "dbo.v_AI_Sales_Truth",
@@ -22,10 +22,10 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
-  "dbo.v_AI_Omnibus_Forecasting": {
-    description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes MonthlyRev, PrevMonthRev, LastYearSameMonthRev (Seasonality), and RunRate3Month (Momentum). Use for all future projections.",
+  "dbo.v_AI_Omnibus_Forecast_Master": {
+    description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes MonthlyRevenue, PrevMonthRev, SeasonalityReferenceRev (Seasonality), and CurrentRevenueRunRate (Momentum). Use for all future projections.",
     primaryKeys: ["BranchName", "SalesRepName", "TimeKey"],
-    fields: ["BranchName", "SalesRepName", "TimeKey", "MonthlyRev", "PrevMonthRev", "LastYearSameMonthRev", "RunRate3Month", "MarketTrajectory", "Momentum"]
+    fields: ["BranchName", "SalesRepName", "TimeKey", "MonthlyRevenue", "PrevMonthRev", "SeasonalityReferenceRev", "CurrentRevenueRunRate", "PerformanceStatus", "Momentum"]
   },
   "dbo.v_AI_Omnibus_Comparison": {
     description: "COMPARISON ENGINE: Year-over-Year performance analysis. Includes AnnualRev, AnnualQty, PrevYearRev, RevenueVariance, and GrowthPercentage. Use for CEO-level trend comparisons.",

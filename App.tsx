@@ -286,31 +286,31 @@ LEFT JOIN AnnualStats P ON C.BranchName = P.BranchName AND C.SalesRepName = P.Sa
                  </div>
 
                  <div className="space-y-2 pt-4 border-t border-slate-800">
-                   <p className="text-emerald-500 font-bold">-- 3. FORECASTING ENGINE: v_AI_Omnibus_Forecasting</p>
+                   <p className="text-emerald-500 font-bold">-- 3. FORECASTING ENGINE: v_AI_Omnibus_Forecast_Master</p>
                    <pre className="text-slate-500 whitespace-pre-wrap">
-{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Forecasting AS
+{`CREATE OR ALTER VIEW dbo.v_AI_Omnibus_Forecast_Master AS
 WITH MonthlyContext AS (
     SELECT 
         BranchName,
         SalesRepName,
         TimeKey,
-        SUM(Revenue) AS MonthlyRev,
+        SUM(Revenue) AS MonthlyRevenue,
         LAG(SUM(Revenue), 1) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS PrevMonthRev,
-        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS LastYearSameMonthRev,
-        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS RunRate3Month
+        LAG(SUM(Revenue), 12) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey) AS SeasonalityReferenceRev,
+        AVG(SUM(Revenue)) OVER (PARTITION BY BranchName, SalesRepName ORDER BY TimeKey ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS CurrentRevenueRunRate
     FROM dbo.v_AI_Sales_Truth
     GROUP BY BranchName, SalesRepName, TimeKey
 )
 SELECT 
     *,
     CASE 
-        WHEN LastYearSameMonthRev IS NULL THEN 'NEW'
-        WHEN MonthlyRev < LastYearSameMonthRev THEN 'BELOW_SEASONAL_AVG'
-        WHEN MonthlyRev > LastYearSameMonthRev THEN 'EXCEEDING_SEASONAL_AVG'
+        WHEN SeasonalityReferenceRev IS NULL THEN 'NEW'
+        WHEN MonthlyRevenue < SeasonalityReferenceRev THEN 'BELOW_SEASONAL_AVG'
+        WHEN MonthlyRevenue > SeasonalityReferenceRev THEN 'EXCEEDING_SEASONAL_AVG'
         ELSE 'STABLE'
-    END AS MarketTrajectory,
+    END AS PerformanceStatus,
     CASE 
-        WHEN MonthlyRev < PrevMonthRev THEN 'DECLINING'
+        WHEN MonthlyRevenue < PrevMonthRev THEN 'DECLINING'
         ELSE 'GROWING'
     END AS Momentum
 FROM MonthlyContext;`}
@@ -322,7 +322,7 @@ FROM MonthlyContext;`}
                    <pre className="text-slate-500 whitespace-pre-wrap">
 {`GRANT SELECT ON dbo.v_AI_Sales_Truth TO [YourUser];
 GRANT SELECT ON dbo.v_AI_Omnibus_Comparison TO [YourUser];
-GRANT SELECT ON dbo.v_AI_Omnibus_Forecasting TO [YourUser];
+GRANT SELECT ON dbo.v_AI_Omnibus_Forecast_Master TO [YourUser];
 -- Replace [YourUser] with the actual database user used by the OgradyBridge.`}
                    </pre>
                  </div>
