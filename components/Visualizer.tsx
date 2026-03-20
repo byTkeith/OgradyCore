@@ -29,6 +29,20 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
 
   const { xKey, yKey } = resolveKeys();
 
+  const tooltipFormatter = (value: any, name: string) => {
+    if (typeof value === 'number') {
+      const n = name.toLowerCase();
+      if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
+        return [value, name];
+      }
+      if (n.includes('qty') || n.includes('quantity')) {
+        return [value.toLocaleString(), name];
+      }
+      return [`R ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name];
+    }
+    return [value, name];
+  };
+
   // Handle Top 10 / Bottom 10 logic for large datasets
   const isLargeDataset = data.length > 15;
   const sortedData = [...data].sort((a, b) => (Number(b[yKey]) || 0) - (Number(a[yKey]) || 0));
@@ -47,6 +61,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip 
+                  formatter={tooltipFormatter}
                   cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                   contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }}
                 />
@@ -68,7 +83,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
+                <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Line 
                   type="monotone" 
                   dataKey={yKey} 
@@ -104,7 +119,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                     <Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} stroke="rgba(0,0,0,0.3)" />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
+                <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
               </PieChart>
             </ResponsiveContainer>
@@ -125,7 +140,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
+                <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Area type="monotone" dataKey={yKey} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={2} animationDuration={1500} />
               </AreaChart>
             </ResponsiveContainer>

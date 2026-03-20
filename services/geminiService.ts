@@ -33,16 +33,28 @@ const getSystemInstruction = (now: string) => {
     ## CURRENCY
     All financial values are in South African Rands (ZAR). Use 'R' as the currency symbol in explanations.
 
+    ## SEMANTIC RULES: TIME VS MONEY
+    ### 1. THE TIMEKEY COLUMN (DIMENSION)
+    - \`TimeKey\` is an **Integer Label** (e.g. 202603).
+    - **NEVER** use \`SUM(TimeKey)\`, \`AVG(TimeKey)\`, or format it as Currency.
+    - **USAGE**: Use \`TimeKey\` only for \`GROUP BY\`, \`ORDER BY\`, or \`WHERE\` range filters.
+    - **CEO LABEL**: Use the \`Period\` column (e.g., 'Mar-2026') for report headers and X-axis labels.
+
+    ### 2. THE REVENUE COLUMN (FACT)
+    - \`Revenue\`, \`Momentum\`, \`LastYearRevenue\`, and \`ProjectedRunRate\` are **Currency**.
+    - **USAGE**: These are the only columns you should \`SUM()\` or \`AVG()\`.
+
     ## BUSINESS INTELLIGENCE PROTOCOL
     ### QUESTION: "Is [X] improving?"
     - **LOGIC**: To determine if a branch, product, or rep is "improving," you MUST check the \`Momentum\` and \`MomentumStatus\` columns.
-    - **SQL**: \`SELECT TOP 1 TimeKey, SUM(Momentum) AS TotalMomentum, MAX(MomentumStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... GROUP BY TimeKey ORDER BY TimeKey DESC\`
+    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(Momentum) AS TotalMomentum, MAX(MomentumStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
 
     ### COLUMN DEFINITIONS
     - \`Momentum\`: The numerical change from the previous month.
     - \`MomentumStatus\`: Categorical value ('IMPROVING', 'DECLINING', 'STABLE').
     - \`ProjectedRunRate\`: The 3-month moving average (The anchor for forecasts).
     - \`LastYearRevenue\`: The seasonal baseline for comparison.
+    - \`Period\`: The human-readable date label (e.g. 'Mar-2026').
 
     ## CEO QUERY RULES
     1. If the CEO asks about a "Forecast," provide the \`ProjectedRunRate\` alongside \`LastYearRevenue\`.
@@ -89,6 +101,7 @@ const getSystemInstruction = (now: string) => {
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Logic: Type 57 (Overrides) are included as sales. Types 81/89 are subtracted.
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
 
     ### KEY PERFORMANCE INDICATORS (KPIs):
     - \`Revenue\`: Net sales in ZAR.
@@ -101,6 +114,8 @@ const getSystemInstruction = (now: string) => {
     1. **FIVE-NINES ACCURACY**: NEVER calculate percentages or variances manually. Use the pre-calculated columns in the comparison/forecasting views.
     2. **FORECASTING**: 
        - To forecast: Compare \`ProjectedRunRate\` against \`LastYearRevenue\`.
+       - Analyze the **Trend of Revenue over TimeKey**.
+       - Always sort by \`TimeKey ASC\` to see the chronological progression.
        - Growth: Filter \`PerformanceStatus = 'EXCEEDING_SEASONAL_AVG'\`.
        - Decline: Filter \`PerformanceStatus = 'BELOW_SEASONAL_AVG'\`.
 
@@ -111,16 +126,16 @@ const getSystemInstruction = (now: string) => {
 
     ## EXAMPLE PATTERNS
     - User: "Forecast for Correen"
-    - AI SQL: SELECT TOP 12 TimeKey, SUM(MonthlyRevenue), SUM(LastYearRevenue), AVG(ProjectedRunRate)
+    - AI SQL: SELECT TOP 12 TimeKey, Period, SUM(MonthlyRevenue), SUM(LastYearRevenue), AVG(ProjectedRunRate)
              FROM v_AI_Omnibus_Forecast_Master
              WHERE SalesRepName LIKE '%CORREEN%'
-             GROUP BY TimeKey ORDER BY TimeKey DESC;
+             GROUP BY TimeKey, Period ORDER BY TimeKey ASC;
 
     - User: "Is Value Coat improving?"
-    - AI SQL: SELECT TOP 1 TimeKey, SUM(Momentum) AS TotalMomentum, MAX(MomentumStatus) 
+    - AI SQL: SELECT TOP 1 TimeKey, Period, SUM(Momentum) AS TotalMomentum, MAX(MomentumStatus) 
              FROM v_AI_Omnibus_Forecast_Master 
              WHERE ProductName LIKE '%VALUE COAT%' 
-             GROUP BY TimeKey ORDER BY TimeKey DESC;
+             GROUP BY TimeKey, Period ORDER BY TimeKey DESC;
 
     ## SEMANTIC MAPPING
     - Regions: Pretoria = SalesRepName LIKE '%CORREEN%'.

@@ -42,8 +42,22 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
     return acc;
   }, {} as Record<string, number>);
 
-  const formatVal = (val: any) => {
+  const formatVal = (val: any, key?: string) => {
     if (typeof val === 'number') {
+        const k = (key || '').toLowerCase();
+        // TimeKey, Year, Month should be treated as labels/integers, not money
+        if (k.includes('timekey') || k.includes('year') || k.includes('month')) {
+            return String(val);
+        }
+        // Quantities should be formatted as integers with no currency symbol
+        if (k.includes('qty') || k.includes('quantity')) {
+            return val.toLocaleString(undefined, { 
+                minimumFractionDigits: 0, 
+                maximumFractionDigits: 0 
+            });
+        }
+        
+        // Default to currency for other numeric fields (Revenue, Momentum, etc.)
         return 'R ' + val.toLocaleString(undefined, { 
             minimumFractionDigits: 2, 
             maximumFractionDigits: 2 
@@ -61,7 +75,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
             <div key={key} className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl shadow-xl">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{key} TOTAL</p>
               <p className="text-2xl font-black text-emerald-400 font-mono tracking-tighter">
-                {formatVal(totals[key])}
+                {formatVal(totals[key], key)}
               </p>
             </div>
           ))}
@@ -89,7 +103,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
                 <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
                   {allKeys.map(key => (
                      <td key={key} className={`px-4 py-3 ${typeof row[key] === 'number' ? 'text-right text-emerald-400 font-mono font-bold' : 'text-slate-300 font-medium'}`}>
-                        {formatVal(row[key])}
+                        {formatVal(row[key], key)}
                      </td>
                   ))}
                 </tr>

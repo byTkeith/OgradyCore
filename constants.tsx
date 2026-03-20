@@ -23,9 +23,9 @@ export const SALES_TRANSACTION_TYPES = [
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
   "dbo.v_AI_Omnibus_Forecast_Master": {
-    description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes MonthlyRevenue, MonthlyQty, PrevMonthRev, LastYearRevenue (Seasonality), ProjectedRunRate (Momentum), Momentum (Numeric change), and MomentumStatus (Improving/Declining). Use for all future projections.",
+    description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes Period (Label), MonthlyRevenue, MonthlyQty, PrevMonthRev, LastYearRevenue (Seasonality), ProjectedRunRate (Momentum), Momentum (Numeric change), and MomentumStatus (Improving/Declining). Use for all future projections.",
     primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],
-    fields: ["BranchName", "SalesRepName", "ProductName", "TimeKey", "MonthlyRevenue", "MonthlyQty", "PrevMonthRev", "LastYearRevenue", "ProjectedRunRate", "Momentum", "MomentumStatus", "PerformanceStatus"]
+    fields: ["BranchName", "SalesRepName", "ProductName", "TimeKey", "Period", "MonthlyRevenue", "MonthlyQty", "PrevMonthRev", "LastYearRevenue", "ProjectedRunRate", "Momentum", "MomentumStatus", "PerformanceStatus"]
   },
   "dbo.v_AI_Omnibus_Comparison": {
     description: "COMPARISON ENGINE: Year-over-Year performance analysis. Includes AnnualRev, AnnualQty, PrevYearRev, RevenueVariance, and GrowthPercentage. Use for CEO-level trend comparisons.",

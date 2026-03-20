@@ -310,6 +310,7 @@ SELECT
     SalesRepName,
     ProductName,
     TimeKey,
+    FORMAT(DATEFROMPARTS(TimeKey / 100, TimeKey % 100, 1), 'MMM-yyyy') AS Period,
     MonthlyRevenue,
     MonthlyQty,
     PrevMonthRev,
