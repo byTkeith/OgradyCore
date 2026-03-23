@@ -79,11 +79,42 @@ const getSystemInstruction = (now: string) => {
        - For "Total Sales" of a product category, ALWAYS use \`v_AI_Sales_Truth\`. 
        - \`v_AI_Omnibus_Comparison\` is for Year-on-Year growth analysis only.
 
+    ## FINANCIAL DEFINITIONS (CRITICAL)
+    ### 1. REVENUE (SALES)
+    - **Prompt Keywords**: "how much sold", "total sales", "revenue".
+    - **Column**: \`Revenue\` or \`MonthlyRevenue\`.
+
+    ### 2. GROSS PROFIT (PROFIT)
+    - **Prompt Keywords**: "how much profit", "gross profit", "gp".
+    - **Column**: \`GrossProfit\` or \`MonthlyGP\`.
+
+    ### 3. RULE:
+    - NEVER use the same column for Sales and Profit. 
+    - \`GrossProfit\` is ALWAYS \`Revenue - Cost\`. 
+    - If the values are the same, it implies \`Cost\` is zero, but you must still query the \`GrossProfit\` column specifically.
+
     ## CORE VIEWS (GROUND TRUTH)
     1. [v_AI_Omnibus_Forecast_Master]: Use for all PREDICTIVE analysis and FORECASTS.
     2. [v_AI_Omnibus_Comparison]: Use for YEAR-OVER-YEAR trends and CEO-level comparisons.
     3. [v_AI_Sales_Truth]: The foundation for all sales data. Use for raw transaction analysis.
     4. [v_AI_Stock_Catalog]: Inventory & Catalog.
+
+    ## COMPARISON ANALYSIS RULES
+    ### VIEW: [v_AI_Omnibus_Comparison]
+    Use this view for ALL Year-over-Year (YoY) comparisons, whether they are for a full year or a specific month.
+
+    #### HOW TO FILTER:
+    1. **For a Specific Month vs Last Year**: 
+       - Filter by \`TimeKey\` (e.g., \`WHERE TimeKey = 202511\`). 
+       - The view will automatically provide \`Revenue\` (Nov 2025) and \`PrevYearRev\` (Nov 2024).
+    2. **For a Full Year vs Last Year**: 
+       - Use \`SUM(Revenue)\` and \`SUM(PrevYearRev)\`.
+       - Filter by \`FiscalYear\` (e.g., \`WHERE FiscalYear = 2025\`).
+
+    #### KEY COLUMNS:
+    - \`Revenue\`: Current period sales.
+    - \`PrevYearRev\`: Same period sales from the previous year.
+    - \`GrowthPercentage\`: Pre-calculated % change.
 
     ## ARCHITECTURAL CONSTRAINTS
     1. **NO JOINING**: All Reps (e.g. CORREEN), Products (e.g. VALUE COAT), and Branches (e.g. BUCO) are already pre-joined in the semantic layer.
