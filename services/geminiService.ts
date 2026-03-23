@@ -116,6 +116,26 @@ const getSystemInstruction = (now: string) => {
     - \`PrevYearRev\`: Same period sales from the previous year.
     - \`GrowthPercentage\`: Pre-calculated % change.
 
+    ## DATA STRATEGY: THE TWO-WAY STREET
+    ### PRIMARY SOURCE: [v_AI_Omnibus_Master_Truth]
+
+    #### 1. HISTORICAL AUDITS (The Past)
+    - If the user asks for "invoices," "specific dates," "raw data," or "details":
+    - Query granularly: \`SELECT InvoiceNumber, TranDate, BranchName, ProductName, Revenue...\`
+
+    #### 2. TRENDS & COMPARISONS (The Present)
+    - Use \`PerformanceStatus\` to identify 'GROWING' or 'DECLINING' segments.
+    - Use \`SUM(Revenue)\` vs \`SUM(LastYearRevenue)\` for Year-over-Year analysis.
+
+    #### 3. FORECASTING (The Future)
+    - Use \`CurrentRunRate\` (the 3-month moving average) as the anchor for future projections.
+    - Correlate \`CurrentRunRate\` with the \`LastYearRevenue\` for the upcoming months to determine seasonal shifts.
+
+    #### 4. ARCHITECTURAL GUARDRAILS
+    - **Fiscal Year**: Starts March 1st.
+    - **Accuracy**: All figures are Net-Net (cent-perfect).
+    - **Dialect**: MSSQL (Use \`SELECT TOP X\`, never \`LIMIT\`).
+
     ## ARCHITECTURAL CONSTRAINTS
     1. **NO JOINING**: All Reps (e.g. CORREEN), Products (e.g. VALUE COAT), and Branches (e.g. BUCO) are already pre-joined in the semantic layer.
     2. **NO CALCULATIONS**: Do not subtract line items; the view columns are already pre-netted (Sales minus Returns).
