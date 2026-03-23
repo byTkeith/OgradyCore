@@ -48,6 +48,10 @@ const getSystemInstruction = (now: string) => {
     2. If the user asks for "Total Sales," use \`SUM(MonthlyRevenue)\`.
     3. Use \`MAX(MomentumStatus)\` when grouping by month to get the trend label.
 
+    ## BOM RULE (CRITICAL)
+    - Bill of Materials (Type 84) are EXCLUDED from all revenue reports.
+    - If a user asks why a mixed paint item is lower than expected, explain that the view reports the Retail Invoice Value, not the internal ingredient explosion.
+
     ## CURRENCY
     All financial values are in South African Rands (ZAR). Use 'R' as the currency symbol in explanations.
 
