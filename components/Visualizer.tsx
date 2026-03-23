@@ -38,9 +38,29 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       if (n.includes('qty') || n.includes('quantity')) {
         return [value.toLocaleString(), name];
       }
+      if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
+        return [`${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`, name];
+      }
       return [`R ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name];
     }
     return [value, name];
+  };
+
+  const yAxisFormatter = (value: any) => {
+    if (typeof value === 'number') {
+      const n = yKey.toLowerCase();
+      if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
+        return String(value);
+      }
+      if (n.includes('qty') || n.includes('quantity')) {
+        return value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" });
+      }
+      if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
+        return `${value}%`;
+      }
+      return `R ${value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" })}`;
+    }
+    return value;
   };
 
   // Handle Top 10 / Bottom 10 logic for large datasets
@@ -59,7 +79,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip 
                   formatter={tooltipFormatter}
                   cursor={{ fill: 'rgba(255,255,255,0.05)' }}
@@ -82,7 +102,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Line 
                   type="monotone" 
@@ -139,7 +159,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Area type="monotone" dataKey={yKey} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={2} animationDuration={1500} />
               </AreaChart>

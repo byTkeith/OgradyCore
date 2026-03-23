@@ -59,6 +59,14 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
             });
         }
         
+        // Percentages should be formatted with a % sign
+        if (k.includes('percent') || k.includes('%') || k.includes('pct') || k.includes('margin') || k.includes('variance') || k.includes('rate')) {
+            return val.toLocaleString(undefined, { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            }) + '%';
+        }
+
         // Default to currency for other numeric fields (Revenue, Momentum, etc.)
         return 'R ' + val.toLocaleString(undefined, { 
             minimumFractionDigits: 2, 
