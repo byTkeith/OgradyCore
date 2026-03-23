@@ -217,6 +217,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       
       ## REQUIREMENTS:
       - Use ZAR (R) for all currency references.
+      - Use Percentage (%) for all growth metrics.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
@@ -228,6 +229,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       Trend Analysis & KPIs:
       - Detailed trend 1 with KPI impact.
       - Detailed trend 2 with year-over-year comparison.
+      - Detailed trend 3 with comparison to industry benchmarks and competitors.
       >>>RSK
       Risk Assessment:
       - Critical risk 1 (e.g., supply chain, margin compression).
@@ -235,6 +237,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       >>>STR
       Strategic Roadmap:
       - Immediate strategic move 1 (Actionable).
+      - Immediate strategic move 2 (Actionable and evidence-based).
       - Long-term growth strategy based on the data.`;
 
     const insightResponse = await ai.models.generateContent({
