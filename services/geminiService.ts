@@ -95,7 +95,8 @@ const getSystemInstruction = (now: string) => {
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Current Date: ${now}.
-    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money.\'Percentage\' is a count (%), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **PERCENTAGES**: If you calculate a percentage, the column alias MUST include the word 'Percent' or '%'.
 
     ## ANALYTICAL PROTOCOL
     1. **FIVE-NINES ACCURACY**: NEVER calculate percentages or variances manually. Use the pre-calculated columns in the comparison/forecasting views.
@@ -217,7 +218,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       
       ## REQUIREMENTS:
       - Use ZAR (R) for all currency references.
-      - Use Percentage (%) for all growth metrics.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
@@ -229,7 +229,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       Trend Analysis & KPIs:
       - Detailed trend 1 with KPI impact.
       - Detailed trend 2 with year-over-year comparison.
-      - Detailed trend 3 with comparison to industry benchmarks and competitors.
       >>>RSK
       Risk Assessment:
       - Critical risk 1 (e.g., supply chain, margin compression).
@@ -237,7 +236,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       >>>STR
       Strategic Roadmap:
       - Immediate strategic move 1 (Actionable).
-      - Immediate strategic move 2 (Actionable and evidence-based).
       - Long-term growth strategy based on the data.`;
 
     const insightResponse = await ai.models.generateContent({
