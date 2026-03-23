@@ -95,7 +95,7 @@ const getSystemInstruction = (now: string) => {
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Current Date: ${now}.
-    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money.\'Percentage\' is a count (%), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
 
     ## ANALYTICAL PROTOCOL
     1. **FIVE-NINES ACCURACY**: NEVER calculate percentages or variances manually. Use the pre-calculated columns in the comparison/forecasting views.
