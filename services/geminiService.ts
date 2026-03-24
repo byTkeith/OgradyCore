@@ -70,7 +70,7 @@ const getSystemInstruction = (now: string) => {
 
     ## EXAMPLE:
     "Which branches are declining?"
-    SQL: SELECT BranchName, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS CurrentRevenue, SUM(CAST(LastYearRevenue AS DECIMAL(18,2))) AS LastYearRevenue, MAX(PerformanceStatus) AS Status
+    SQL: SELECT BranchName, SUM(CAST(MonthlyRevenue AS FLOAT)) AS CurrentRevenue, SUM(CAST(LastYearRevenue AS FLOAT)) AS LastYearRevenue, MAX(PerformanceStatus) AS Status
          FROM v_AI_Omnibus_Forecast_Master 
          WHERE PerformanceStatus = 'DECLINING' AND TranDate <= CAST(GETDATE() AS DATE)
          GROUP BY BranchName;
@@ -82,11 +82,11 @@ const getSystemInstruction = (now: string) => {
 
     ### ARCHITECT RULES:
     1. NEVER use \`LAG\` or \`OVER\` in the generated SQL. The view already has trailing data.
-    2. If the user asks for "Total Sales," use \`SUM(CAST(MonthlyRevenue AS DECIMAL(18,2)))\`.
+    2. If the user asks for "Total Sales," use \`SUM(CAST(MonthlyRevenue AS FLOAT))\`.
     3. Use \`MAX(PerformanceStatus)\` when grouping by month to get the trend label.
     4. **NO JOINS**: Do not join with any other table or view. All data is in \`v_AI_Omnibus_Forecast_Master\`.
     5. **NO SUBQUERIES**: Do not use subqueries for filtering or calculations.
-    6. **OVERFLOW PROTECTION**: When summing quantities or revenue, ALWAYS cast to \`BIGINT\` (for units) or \`DECIMAL(18,2)\` (for currency) to prevent "Arithmetic overflow error converting expression to data type int."
+    6. **OVERFLOW PROTECTION**: When summing quantities or revenue, ALWAYS cast to \`FLOAT\` (e.g., \`SUM(CAST(MonthlyQty AS FLOAT))\`) to prevent "Arithmetic overflow error converting expression to data type int." This is mandatory for all numeric aggregations.
 
     ## BOM RULE (CRITICAL)
     - Bill of Materials (Type 84) are EXCLUDED from all revenue reports.
@@ -98,11 +98,11 @@ const getSystemInstruction = (now: string) => {
     ## BUSINESS INTELLIGENCE PROTOCOL
     ### QUESTION: "Is [X] improving?"
     - **LOGIC**: To determine if a branch, product, or rep is "improving," you MUST check the \`MomentumStatus\` column.
-    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS TotalRevenue, MAX(MomentumStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
+    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS FLOAT)) AS TotalRevenue, MAX(MomentumStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
 
     ### QUESTION: "Is [X] declining overall?"
     - **LOGIC**: To determine if a branch, product, or rep is "declining overall," you MUST check the \`PerformanceStatus\` column.
-    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS TotalRevenue, MAX(PerformanceStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
+    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS FLOAT)) AS TotalRevenue, MAX(PerformanceStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
 
     ## CEO QUERY RULES
     1. If the CEO asks about a "Forecast," provide the \`ProjectedRunRate\` alongside \`LastYearRevenue\`.
@@ -148,7 +148,7 @@ const getSystemInstruction = (now: string) => {
 
     # UPDATED SQL PATTERN FOR TOP 30 STOCK
     Instead of fetching the pre-calculated stock, generate SQL like this:
-    \`SELECT TOP 30 ProductName, TimeKey, SUM(CAST(MonthlyQty AS BIGINT)) AS QtySold, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus, SUM(CAST(CurrentWarehouseStock AS BIGINT)) AS StockOnHand
+    \`SELECT TOP 30 ProductName, TimeKey, SUM(CAST(MonthlyQty AS FLOAT)) AS QtySold, SUM(CAST(MonthlyRevenue AS FLOAT)) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus, SUM(CAST(CurrentWarehouseStock AS FLOAT)) AS StockOnHand
     FROM v_AI_Omnibus_Forecast_Master
     WHERE TranDate <= CAST(GETDATE() AS DATE)
     GROUP BY ProductName, TimeKey
@@ -174,7 +174,7 @@ const getSystemInstruction = (now: string) => {
     AI Logic: 
     - **SQL**: Retrieve the historical volume trend for the top 30 products.
     - **QUERY**: 
-      \`SELECT TOP 30 ProductName, TimeKey, SUM(CAST(MonthlyQty AS BIGINT)) AS MonthlyVolume, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus, SUM(CAST(CurrentWarehouseStock AS BIGINT)) AS StockOnHand
+      \`SELECT TOP 30 ProductName, TimeKey, SUM(CAST(MonthlyQty AS FLOAT)) AS MonthlyVolume, SUM(CAST(MonthlyRevenue AS FLOAT)) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus, SUM(CAST(CurrentWarehouseStock AS FLOAT)) AS StockOnHand
       FROM v_AI_Omnibus_Forecast_Master 
       WHERE TranDate <= CAST(GETDATE() AS DATE)
       GROUP BY ProductName, TimeKey 
@@ -186,7 +186,7 @@ const getSystemInstruction = (now: string) => {
     - **Daily/Granular**: Use \`Revenue\`.
     - **Monthly Analysis**: Use \`MonthlyRevenue\` or \`ActualRevenue\`.
     - **Weekly Analysis**: Use \`WeeklyRevenue\`.
-    - **Logic**: Always use \`SUM(CAST(column AS DECIMAL(18,2)))\` when grouping to prevent arithmetic overflow.
+    - **Logic**: Always use \`SUM(CAST(column AS FLOAT))\` when grouping to prevent arithmetic overflow.
 
     ## 2. STOCK & QUANTITY (ITEMS)
     - **Monthly Volume**: Use \`MonthlyQty\`.
@@ -194,7 +194,7 @@ const getSystemInstruction = (now: string) => {
     - **Minimum Stock Recommendations**: 
       - For Weekly targets: Use \`SuggestedWeeklySafetyStock\`.
       - For Monthly targets: Use \`SuggestedMonthlySafetyStock\`.
-    - **Logic**: Always use \`SUM(CAST(column AS BIGINT))\` when grouping to prevent arithmetic overflow. **NEVER** apply currency (R) to these columns. These are units/integers.
+    - **Logic**: Always use \`SUM(CAST(column AS FLOAT))\` when grouping to prevent arithmetic overflow. **NEVER** apply currency (R) to these columns. These are units/integers.
 
     ## 3. HISTORICAL CONTEXT
     - Last year's Revenue: \`LastYearRevenue\`.
