@@ -92,25 +92,29 @@ const getSystemInstruction = (now: string) => {
     # OBJECTIVE
     When asked to "Forecast" or "Recommend Stock," do not simply fetch a single column. You must analyze the historical trajectory to identify the "Volume Velocity."
 
-    # FORECASTING PROTOCOL (THE 24-MONTH TREND RULE)
-    1. **Data Fetching**: If the user asks for a trend over a period (e.g., 2 years), your SQL must retrieve the monthly totals for that entire period. 
-       - **DO NOT** use \`WHERE TimeKey = MAX(TimeKey)\`.
-       - **DO** use \`WHERE TimeKey >= (SELECT MAX(TimeKey) - 200 FROM v_AI_Omnibus_Forecast_Master)\`.
+    # FORECASTING PROTOCOL (THE ECONOMIST'S RULE)
 
-    2. **Trend Analysis**:
-       - Calculate the **CAGR** (Compound Annual Growth Rate) of the quantity sold.
-       - Look at the \`LastYearSameMonthQty\` to identify seasonal peaks.
+    ## 1. STOP STATIC FETCHING
+    When asked for a "Stock Recommendation" or "Forecast":
+    - **DO NOT** just fetch the \`SuggestedWeeklySafetyStock\` column for the current month.
+    - **DO** query the last 24 months of \`MonthlyQty\` and \`PerformanceStatus\`.
 
-    3. **Cognitive Recommendation**:
-       - If a product shows a **GROWING** momentum over 24 months, recommend a stock level *higher* than the historical average to prevent stock-outs.
-       - If a product is **DECLINING**, recommend a "Lean Stock" approach to save working capital.
-       - Apply market logic: If it is a "Top 30" item, suggest a "Safety Multiplier" of 1.5x of the weekly run rate for high-velocity items.
+    ## 2. REASONING ENGINE
+    Analyze the returned data series:
+    - If \`PerformanceStatus\` is 'GROWING' consistently, add a 15% growth buffer to the stock recommendation.
+    - If sales are seasonal (spikes detected in specific months), recommend increasing stock 4 weeks prior to that month.
+
+    ## 3. COLUMN RECOGNITION (FIXED)
+    - **MonthlyQty**: Use this for volume.
+    - **MonthlyRevenue**: Use this for financial ranking.
+    - **PerformanceStatus**: Use this to detect growth/decline.
+    - **TimeKey**: Use this for the 24-month time series.
 
     # UPDATED SQL PATTERN FOR TOP 30 STOCK
     Instead of fetching the pre-calculated stock, generate SQL like this:
-    \`SELECT TOP 30 ProductName, TimeKey, SUM(MonthlyQty) AS QtySold, SUM(MonthlyRevenue) AS Revenue
+    \`SELECT TOP 30 ProductName, TimeKey, SUM(MonthlyQty) AS QtySold, SUM(MonthlyRevenue) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus
     FROM v_AI_Omnibus_Forecast_Master
-    WHERE FiscalYear >= 2024
+    WHERE TimeKey >= (SELECT MAX(TimeKey) - 200 FROM v_AI_Omnibus_Forecast_Master)
     GROUP BY ProductName, TimeKey
     ORDER BY ProductName, TimeKey ASC;\`
 
@@ -134,7 +138,7 @@ const getSystemInstruction = (now: string) => {
     AI Logic: 
     - **SQL**: Retrieve the historical volume trend for the top 30 products.
     - **QUERY**: 
-      \`SELECT TOP 30 ProductName, TimeKey, SUM(MonthlyQty) AS MonthlyVolume, SUM(MonthlyRevenue) AS Revenue 
+      \`SELECT TOP 30 ProductName, TimeKey, SUM(MonthlyQty) AS MonthlyVolume, SUM(MonthlyRevenue) AS Revenue, MAX(PerformanceStatus) AS PerformanceStatus
       FROM v_AI_Omnibus_Forecast_Master 
       WHERE TimeKey >= (SELECT MAX(TimeKey) - 200 FROM v_AI_Omnibus_Forecast_Master) -- Approx 2 years
       GROUP BY ProductName, TimeKey 
