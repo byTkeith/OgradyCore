@@ -87,19 +87,25 @@ const getSystemInstruction = (now: string) => {
        - ALWAYS use \`v_AI_Omnibus_Forecast_Master\` for Sales, Trends, and Forecasts. 
        - Use \`v_AI_Omnibus_Master_Truth\` for granular historical audits.
 
-    ## FINANCIAL DEFINITIONS (CRITICAL)
-    ### 1. REVENUE (SALES)
-    - **Prompt Keywords**: "how much sold", "total sales", "revenue".
-    - **Column**: \`Revenue\` or \`MonthlyRevenue\`.
+    # EXECUTIVE ANALYTICAL DICTIONARY
+    ## 1. REVENUE (MONEY)
+    - **Daily/Granular**: Use \`Revenue\`.
+    - **Monthly Analysis**: Use \`MonthlyRevenue\` or \`ActualRevenue\`.
+    - **Weekly Analysis**: Use \`WeeklyRevenue\`.
+    - **Logic**: Always use \`SUM()\` when grouping.
 
-    ### 2. GROSS PROFIT (PROFIT)
-    - **Prompt Keywords**: "how much profit", "gross profit", "gp".
-    - **Column**: \`GrossProfit\` or \`MonthlyGP\`.
+    ## 2. STOCK & QUANTITY (ITEMS)
+    - **Monthly Volume**: Use \`MonthlyQty\`.
+    - **Weekly Volume**: Use \`WeeklyQty\`.
+    - **Minimum Stock Recommendations**: 
+      - For Weekly targets: Use \`SuggestedWeeklySafetyStock\`.
+      - For Monthly targets: Use \`SuggestedMonthlySafetyStock\`.
+    - **Logic**: **NEVER** apply currency (R) to these columns. These are units/integers.
 
-    ### 3. RULE:
-    - NEVER use the same column for Sales and Profit. 
-    - \`GrossProfit\` is ALWAYS \`Revenue - Cost\`. 
-    - If the values are the same, it implies \`Cost\` is zero, but you must still query the \`GrossProfit\` column specifically.
+    ## 3. HISTORICAL CONTEXT
+    - Last year's Revenue: \`LastYearRevenue\`.
+    - Last year's Quantity: \`LastYearSameMonthQty\`.
+    - Current Trajectory: \`ProjectedRunRate\`.
 
     ## DATA STRATEGY: THE TWO-WAY STREET
     ### PRIMARY SOURCE: [v_AI_Omnibus_Master_Truth]
@@ -130,13 +136,13 @@ const getSystemInstruction = (now: string) => {
     # INVENTORY FORECASTING RULES (SENIOR ARCHITECT LEVEL)
     ## 1. QUANTITY IS NOT CURRENCY
     - **NEVER** use \`R\` or currency symbols for Quantity.
-    - **NEVER** return decimals for stock levels. Always use the \`SuggestedWeeklySafetyStock\` column or apply \`CEILING()\`.
+    - **NEVER** return decimals for stock levels. Always use the \`SuggestedWeeklySafetyStock\` or \`SuggestedMonthlySafetyStock\` columns or apply \`CEILING()\`.
 
     ## 2. INFORMED FORECASTING (THE "TWO-WAY STREET")
     When asked for "Minimum Stock" or "Forecasted Volume":
     - **HISTORICAL DATA**: Look at \`LastYearSameMonthQty\` to account for seasonality.
     - **MOMENTUM**: Look at \`QuantityRunRate\` to see the current 3-month volume trend.
-    - **FORMULA**: The view provides \`SuggestedWeeklySafetyStock\`. This uses the (3-month Run Rate / 4 weeks) + a 20% buffer for supply chain safety. Use this as your primary recommendation.
+    - **FORMULA**: Use \`SuggestedWeeklySafetyStock\` or \`SuggestedMonthlySafetyStock\` as your primary recommendation.
 
     ## 3. PROMPT PATTERN
     User: "What minimum weekly stock should we keep?"
@@ -151,7 +157,7 @@ const getSystemInstruction = (now: string) => {
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Current Date: ${now}.
-    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\`, \`MonthlyQty\`, and \`SuggestedWeeklySafetyStock\` are counts (units), NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\`, \`MonthlyQty\`, \`WeeklyQty\`, \`SuggestedWeeklySafetyStock\`, and \`SuggestedMonthlySafetyStock\` are counts (units), NOT money. Only \`Revenue\`, \`MonthlyRevenue\`, \`WeeklyRevenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
     - **PERCENTAGES**: If you calculate a percentage, the column alias MUST include the word 'Percent' or '%'.
 
     ## ANALYTICAL PROTOCOL
