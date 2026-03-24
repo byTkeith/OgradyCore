@@ -112,7 +112,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
               {data.slice(0, 50).map((row, i) => (
                 <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
                   {allKeys.map(key => (
-                     <td key={key} className={`px-4 py-3 ${typeof row[key] === 'number' ? 'text-right text-emerald-400 font-mono font-bold' : 'text-slate-300 font-medium'}`}>
+                     <td key={key} className={`px-4 py-3 ${typeof row[key] === 'number' ? 'text-right text-emerald-400 font-mono font-bold whitespace-nowrap' : 'text-slate-300 font-medium'}`}>
                         {formatVal(row[key], key)}
                      </td>
                   ))}
@@ -145,42 +145,86 @@ const ChatInterface: React.FC = () => {
     if (!element) return;
 
     try {
-      // Create a canvas from the element
+      const originalStyle = element.style.cssText;
+      
+      // Force a professional width for the capture
+      element.style.width = '1200px';
+      element.style.maxWidth = 'none';
+      element.style.overflow = 'visible';
+      
       const canvas = await html2canvas(element, {
-        scale: 2, // Higher quality
+        scale: 2,
         useCORS: true,
-        backgroundColor: '#020617', // Match slate-950
+        backgroundColor: '#020617',
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        width: 1200,
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.body.querySelector(`[data-pdf-id="${index}"]`) as HTMLElement;
+          if (clonedElement) {
+            clonedElement.style.width = '1200px';
+            clonedElement.style.padding = '60px';
+            clonedElement.style.borderRadius = '0';
+            clonedElement.style.border = 'none';
+          }
+        }
       });
 
+      element.style.cssText = originalStyle;
+
       const imgData = canvas.toDataURL('image/png');
-      
-      // Calculate dimensions for A4
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
       
-      const imgWidth = pageWidth - 20; // 10mm margin on each side
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pdfWidth - (2 * margin);
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       
       let heightLeft = imgHeight;
-      let position = 10; // 10mm top margin
+      let position = 25; // Top margin for header
+      let page = 1;
+
+      // Header Function
+      const addHeader = (p: any) => {
+        p.setFillColor(15, 23, 42); // slate-900
+        p.rect(0, 0, pdfWidth, 20, 'F');
+        p.setTextColor(255, 255, 255);
+        p.setFontSize(10);
+        p.setFont("helvetica", "bold");
+        p.text("O'GRADY PAINTS EXECUTIVE REPORT", margin, 12);
+        p.setFontSize(8);
+        p.setTextColor(148, 163, 184); // slate-400
+        p.setFont("helvetica", "normal");
+        p.text(`Generated: ${new Date().toLocaleString()}`, pdfWidth - margin - 50, 12);
+      };
+
+      // Footer Function
+      const addFooter = (p: any, pageNum: number) => {
+        p.setFontSize(8);
+        p.setTextColor(148, 163, 184);
+        p.text(`Page ${pageNum}`, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+        p.text("CONFIDENTIAL - O'GRADY PAINTS BI CORE", margin, pdfHeight - 10);
+      };
 
       // Add first page
-      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      addHeader(pdf);
+      pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imgHeight, undefined, 'FAST');
+      addFooter(pdf, page);
 
-      // Add extra pages if needed
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
+      heightLeft -= (pdfHeight - 35); // Initial page content height
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 20; // Shift image up
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        page++;
+        addHeader(pdf);
+        pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imgHeight, undefined, 'FAST');
+        addFooter(pdf, page);
+        heightLeft -= (pdfHeight - 35);
       }
 
-      const fileName = `Report_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+      const fileName = `Ogrady_Report_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
       pdf.save(fileName);
     } catch (err) {
       console.error("PDF Generation Error:", err);
@@ -270,6 +314,7 @@ const ChatInterface: React.FC = () => {
           <div 
             key={idx} 
             ref={el => { resultRefs.current[idx] = el; }}
+            data-pdf-id={idx}
             className="space-y-10 animate-in fade-in slide-in-from-bottom-4 p-8 rounded-[3rem] bg-slate-900/30 border border-slate-800/50 shadow-inner"
           >
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
