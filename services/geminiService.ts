@@ -127,25 +127,31 @@ const getSystemInstruction = (now: string) => {
     3. **DIALECT**: This is MSSQL. Use \`SELECT TOP X\` instead of \`LIMIT\`.
     4. **TIME FILTER**: Use \`TimeKey\` (YYYYMM integer) for chronological grouping.
 
-    # INVENTORY & QUANTITY PROTOCOL
-    ## QUANTITY COLUMNS (SYNONYMS):
-    - Use \`MonthlyQty\`, \`Quantity\`, or \`NetQty\`.
-    - These columns already handle Returns (negative quantities are subtracted).
+    # INVENTORY FORECASTING RULES (SENIOR ARCHITECT LEVEL)
+    ## 1. QUANTITY IS NOT CURRENCY
+    - **NEVER** use \`R\` or currency symbols for Quantity.
+    - **NEVER** return decimals for stock levels. Always use the \`SuggestedWeeklySafetyStock\` column or apply \`CEILING()\`.
 
-    ## CALCULATION RULES:
-    - **Minimum Weekly Stock**: 
-      1. Calculate Annual Qty: \`SUM(MonthlyQty)\` for a full \`FiscalYear\`.
-      2. Divide by 48 (12 months x 4 weeks) to get the average weekly run-rate.
-      3. Example: \`CAST(SUM(MonthlyQty) / 48.0 AS DECIMAL(10,2))\`.
+    ## 2. INFORMED FORECASTING (THE "TWO-WAY STREET")
+    When asked for "Minimum Stock" or "Forecasted Volume":
+    - **HISTORICAL DATA**: Look at \`LastYearSameMonthQty\` to account for seasonality.
+    - **MOMENTUM**: Look at \`QuantityRunRate\` to see the current 3-month volume trend.
+    - **FORMULA**: The view provides \`SuggestedWeeklySafetyStock\`. This uses the (3-month Run Rate / 4 weeks) + a 20% buffer for supply chain safety. Use this as your primary recommendation.
 
-    ## TARGET VIEW:
-    - Use \`v_AI_Omnibus_Forecast_Master\` for all inventory planning and sales volume questions.
+    ## 3. PROMPT PATTERN
+    User: "What minimum weekly stock should we keep?"
+    AI Logic: 
+    - SELECT TOP 30 ProductName, MAX(SuggestedWeeklySafetyStock) 
+    - FROM v_AI_Omnibus_Forecast_Master 
+    - WHERE FiscalYear = 2025 
+    - GROUP BY ProductName 
+    - ORDER BY SUM(Revenue) DESC;
 
     ## DATA ANALYST CONTEXT
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Current Date: ${now}.
-    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\` and \`MonthlyQty\` are counts, NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\`, \`MonthlyQty\`, and \`SuggestedWeeklySafetyStock\` are counts (units), NOT money. Only \`Revenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
     - **PERCENTAGES**: If you calculate a percentage, the column alias MUST include the word 'Percent' or '%'.
 
     ## ANALYTICAL PROTOCOL
