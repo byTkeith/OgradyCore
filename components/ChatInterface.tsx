@@ -302,6 +302,18 @@ const ChatInterface: React.FC = () => {
                 <>
                   <SummaryTable data={item.result.data} xAxis={item.result.xAxis} yAxis={item.result.yAxis} />
                   <Visualizer result={item.result} />
+
+                  {item.result.strategicAnalysis && (
+                    <div className="mt-8 p-8 bg-emerald-500/5 border border-emerald-500/20 rounded-[2rem]">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 mb-4 flex items-center gap-2">
+                        <span>📊</span> Strategic Analysis
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed font-serif italic text-lg">
+                        {item.result.strategicAnalysis}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex justify-center mt-8">
                     <button 
                       onClick={(e) => {

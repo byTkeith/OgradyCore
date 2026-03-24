@@ -7,6 +7,7 @@ export interface QueryResult {
   data: DataRecord[];
   sql: string;
   explanation: string;
+  strategicAnalysis?: string;
   visualizationType: 'bar' | 'line' | 'scatter' | 'area' | 'pie';
   xAxis: string;
   yAxis: string;
@@ -17,14 +18,6 @@ export interface AnalystInsight {
   trends: string[];
   anomalies: string[];
   suggestions: string[];
-}
-
-export interface DashboardMetric {
-  label: string;
-  value: string | number;
-  change: number;
-  trend: 'up' | 'down' | 'neutral';
-  icon: string;
 }
 
 export enum AppSection {

@@ -106,6 +106,17 @@ const getSystemInstruction = (now: string) => {
        - If a product is **DECLINING**, recommend a "Lean Stock" approach to save working capital.
        - Apply market logic: If it is a "Top 30" item, suggest a "Safety Multiplier" of 1.5x of the weekly run rate for high-velocity items.
 
+    # UPDATED SQL PATTERN FOR TOP 30 STOCK
+    Instead of fetching the pre-calculated stock, generate SQL like this:
+    \`SELECT TOP 30 ProductName, TimeKey, SUM(MonthlyQty) AS QtySold, SUM(MonthlyRevenue) AS Revenue
+    FROM v_AI_Omnibus_Forecast_Master
+    WHERE FiscalYear >= 2024
+    GROUP BY ProductName, TimeKey
+    ORDER BY ProductName, TimeKey ASC;\`
+
+    # FINAL OUTPUT FORMAT
+    Present the data, but then provide a "Strategic Analysis" paragraph explaining the trend you detected and why your stock recommendation differs from a simple average.
+
     # INVENTORY FORECASTING RULES (SENIOR ARCHITECT LEVEL)
     ## 1. QUANTITY IS NOT CURRENCY
     - **NEVER** use \`R\` or currency symbols for Quantity.
@@ -170,12 +181,23 @@ const getSystemInstruction = (now: string) => {
     SELECT ...
     >>>EXP
     Explanation...
+    >>>STRAT
+    Strategic Analysis (Explain the trend and why the recommendation differs from a simple average)...
     >>>VIZ
     bar|line|pie|area
     >>>X
     ColumnNameForX
     >>>Y
     ColumnNameForY
+    >>>SUM
+    Brief Summary...
+    >>>TRD
+    - Trend 1
+    - Trend 2
+    >>>RSK
+    - Risk 1
+    >>>STR
+    - Suggestion 1
 
     # VIEW SCHEMAS
     - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
@@ -187,12 +209,13 @@ const getSystemInstruction = (now: string) => {
 const parseTuneResponse = (rawText: string) => {
   if (!rawText) return null;
   const data: any = {};
-  const pattern = />>>(SQL|EXP|VIZ|X|Y|SUM|TRD|RSK|STR)\s*([\s\S]*?)(?=(?:>>>)|$)/g;
+  const pattern = />>>(SQL|EXP|STRAT|VIZ|X|Y|SUM|TRD|RSK|STR)\s*([\s\S]*?)(?=(?:>>>)|$)/g;
   let match;
   
   const keyMap: Record<string, string> = {
     "SQL": "sql",
     "EXP": "explanation",
+    "STRAT": "strategicAnalysis",
     "VIZ": "visualizationType",
     "X": "xAxis",
     "Y": "yAxis",
@@ -319,6 +342,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
 
     return {
       ...plan,
+      strategicAnalysis: plan.strategicAnalysis,
       data,
       insight,
       engine: `Gemini Paid (${modelName})`
