@@ -35,7 +35,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return [value, name];
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count')) {
+      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse')) {
         return [value.toLocaleString(), name];
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
@@ -52,7 +52,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return String(value);
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count')) {
+      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse')) {
         return value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" });
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
