@@ -2,6 +2,7 @@
 import React from 'react';
 
 export const CORE_TABLES = [
+  "dbo.v_AI_Omnibus_Master_Truth",
   "dbo.v_AI_Omnibus_Forecast_Master",
   "dbo.v_AI_Omnibus_Comparison",
   "dbo.v_AI_Stock_Catalog",
@@ -22,6 +23,11 @@ export const SALES_TRANSACTION_TYPES = [
 ];
 
 export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: string[], fields: string[], joins?: Record<string, string> }> = {
+  "dbo.v_AI_Omnibus_Master_Truth": {
+    description: "THE MASTER TRUTH: The single source of truth for all BI analysis. Includes historical audits, trends, and forecasting. Replaces all previous views.",
+    primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],
+    fields: ["BranchName", "SalesRepName", "ProductName", "TimeKey", "Period", "FiscalYear", "MonthlyRevenue", "Revenue", "ActualRevenue", "MonthlyQty", "LastYearRevenue", "PrevYearRev", "ProjectedRunRate", "CurrentRunRate", "Momentum", "MomentumStatus", "PerformanceStatus", "InvoiceNumber", "TranDate", "NetCost", "GrossProfit"]
+  },
   "dbo.v_AI_Omnibus_Forecast_Master": {
     description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes Period (Label), MonthlyRevenue, MonthlyQty, PrevMonthRev, LastYearRevenue (Seasonality), ProjectedRunRate (Momentum), Momentum (Numeric change), and MomentumStatus (Improving/Declining). Use for all future projections.",
     primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],

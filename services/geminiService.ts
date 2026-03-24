@@ -127,6 +127,20 @@ const getSystemInstruction = (now: string) => {
     3. **DIALECT**: This is MSSQL. Use \`SELECT TOP X\` instead of \`LIMIT\`.
     4. **TIME FILTER**: Use \`TimeKey\` (YYYYMM integer) for chronological grouping.
 
+    # INVENTORY & QUANTITY PROTOCOL
+    ## QUANTITY COLUMNS (SYNONYMS):
+    - Use \`MonthlyQty\`, \`Quantity\`, or \`NetQty\`.
+    - These columns already handle Returns (negative quantities are subtracted).
+
+    ## CALCULATION RULES:
+    - **Minimum Weekly Stock**: 
+      1. Calculate Annual Qty: \`SUM(MonthlyQty)\` for a full \`FiscalYear\`.
+      2. Divide by 48 (12 months x 4 weeks) to get the average weekly run-rate.
+      3. Example: \`CAST(SUM(MonthlyQty) / 48.0 AS DECIMAL(10,2))\`.
+
+    ## TARGET VIEW:
+    - Use \`v_AI_Omnibus_Forecast_Master\` for all inventory planning and sales volume questions.
+
     ## DATA ANALYST CONTEXT
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
