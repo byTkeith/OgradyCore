@@ -169,7 +169,7 @@ const getSystemInstruction = (now: string) => {
     - Metric: \`Revenue\` (Net-Net realized, cent-perfect).
     - Fiscal Year: March - Feb.
     - Current Date: ${now}.
-    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\`, \`MonthlyQty\`, \`WeeklyQty\`, \`SuggestedWeeklySafetyStock\`, and \`SuggestedMonthlySafetyStock\` are counts (units), NOT money. Only \`Revenue\`, \`MonthlyRevenue\`, \`WeeklyRevenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
+    - **FORMATTING**: \`TimeKey\` is a date (YYYYMM), NOT money. \`Quantity\`, \`MonthlyQty\`, \`WeeklyQty\`, \`SuggestedWeeklySafetyStock\`, \`SuggestedMonthlySafetyStock\`, and any column containing 'Target' or 'Count' are counts (units), NOT money. Only \`Revenue\`, \`MonthlyRevenue\`, \`WeeklyRevenue\`, \`Momentum\`, \`ProjectedRunRate\`, and \`LastYearRevenue\` are currency (ZAR).
     - **PERCENTAGES**: If you calculate a percentage, the column alias MUST include the word 'Percent' or '%'.
 
     ## ANALYTICAL PROTOCOL
