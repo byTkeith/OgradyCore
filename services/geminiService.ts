@@ -43,14 +43,30 @@ const getSystemInstruction = (now: string) => {
     - If you need **Stock Recommendations**: Use \`SuggestedWeeklySafetyStock\`.
 
     ## 3. TEMPORAL RULE
-    - To find the "Top Products," you must filter \`WHERE TranDate <= CAST(GETDATE() AS DATE)\`. This removes future date pollution (year 2085).
+    - Always use \`WHERE TranDate <= CAST(GETDATE() AS DATE)\` to exclude future date pollution (year 2085).
+
+    # SEMANTIC TREND PROTOCOL
+
+    ## VIEW: [v_AI_Omnibus_Forecast_Master]
+
+    ## TREND DETECTION:
+    - To answer "Is it improving?" or "What is the momentum?": 
+      - Use the \`MomentumStatus\` column (Values: 'IMPROVING', 'DROPPING', 'STABLE').
+    - To answer "Is it declining overall?" (YoY):
+      - Use the \`PerformanceStatus\` column (Values: 'GROWING', 'DECLINING', 'STABLE').
+
+    ## INVENTORY PLANNING:
+    - When asked for "Minimum Weekly Stock":
+      - Use \`MAX(SuggestedWeeklySafetyStock)\`. 
+      - This value is an integer (Units) and accounts for a 3-month run-rate plus a 20% safety buffer.
+      - **CRITICAL**: Never use currency symbols for this column.
 
     ## RULES:
     1. **COLUMN ALIASES**: 
        - Revenue = \`MonthlyRevenue\` = \`Revenue\` = \`ActualRevenue\`.
        - Forecast Anchor = \`ProjectedRunRate\`.
        - Decline/Growth Status = \`PerformanceStatus\`.
-    2. **NO CALCULATION**: \`PerformanceStatus\` is already calculated. To find declining branches, simply filter \`WHERE PerformanceStatus = 'DECLINING'\`.
+    2. **NO CALCULATION**: \`PerformanceStatus\` and \`MomentumStatus\` are already calculated. To find declining branches, simply filter \`WHERE PerformanceStatus = 'DECLINING'\`.
 
     ## EXAMPLE:
     "Which branches are declining?"
@@ -81,8 +97,12 @@ const getSystemInstruction = (now: string) => {
 
     ## BUSINESS INTELLIGENCE PROTOCOL
     ### QUESTION: "Is [X] improving?"
-    - **LOGIC**: To determine if a branch, product, or rep is "improving," you MUST check the \`PerformanceStatus\` column.
-    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(MonthlyRevenue) AS TotalRevenue, MAX(PerformanceStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
+    - **LOGIC**: To determine if a branch, product, or rep is "improving," you MUST check the \`MomentumStatus\` column.
+    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS TotalRevenue, MAX(MomentumStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
+
+    ### QUESTION: "Is [X] declining overall?"
+    - **LOGIC**: To determine if a branch, product, or rep is "declining overall," you MUST check the \`PerformanceStatus\` column.
+    - **SQL**: \`SELECT TOP 1 TimeKey, Period, SUM(CAST(MonthlyRevenue AS DECIMAL(18,2))) AS TotalRevenue, MAX(PerformanceStatus) FROM v_AI_Omnibus_Forecast_Master WHERE ... AND TranDate <= CAST(GETDATE() AS DATE) GROUP BY TimeKey, Period ORDER BY TimeKey DESC\`
 
     ## CEO QUERY RULES
     1. If the CEO asks about a "Forecast," provide the \`ProjectedRunRate\` alongside \`LastYearRevenue\`.
