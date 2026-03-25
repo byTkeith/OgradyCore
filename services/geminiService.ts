@@ -263,7 +263,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
-      - Use ZAR (R) for all currency references.
+      - Use ZAR (R) for currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
