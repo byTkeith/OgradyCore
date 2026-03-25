@@ -297,6 +297,53 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   const now = new Date().toISOString().split('T')[0];
 
   try {
+    // 0. Pre-check for Statistical Forecast
+    if (prompt.toLowerCase().includes("forecast") || prompt.toLowerCase().includes("predict")) {
+      // Use Gemini to extract the product name
+      const extractRes = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`,
+      });
+      const productName = extractRes.text?.trim() || "NONE";
+      
+      if (productName !== "NONE") {
+        const forecastEndpoint = bridgeUrl ? `${bridgeUrl}/api/forecast` : '/api/forecast';
+        const forecastRes = await fetch(forecastEndpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ product_name: productName, api_key: apiKey })
+        });
+        
+        if (forecastRes.ok) {
+          const forecastData = await forecastRes.json();
+          if (forecastData.status === "success") {
+            return {
+              sql: "Statistical Model (Holt-Winters) + Gemini Market Adjustment",
+              explanation: `Forecasting ${productName} using Triple Exponential Smoothing.`,
+              strategicAnalysis: forecastData.reasoning,
+              visualizationType: "bar",
+              xAxis: "Metric",
+              yAxis: "Units",
+              data: [
+                { Metric: "Statistical Baseline", Units: forecastData.forecast_units },
+                { Metric: "Market Adjusted Forecast", Units: forecastData.adjusted_forecast }
+              ],
+              insight: {
+                summary: `Forecast for ${productName}: ${forecastData.adjusted_forecast} units.`,
+                trends: [`Statistical baseline: ${forecastData.forecast_units} units`],
+                anomalies: [],
+                suggestions: [forecastData.reasoning]
+              },
+              engine: "Holt-Winters + Gemini Economist"
+            };
+          }
+        }
+      }
+    }
+
     // 1. Generate SQL with Gemini
     const response = await ai.models.generateContent({
       model: modelName,
