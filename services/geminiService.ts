@@ -46,8 +46,24 @@ const getSystemInstruction = (now: string) => {
     Your response must follow this 3-step hierarchy to answer the CEO:
 
     ### STEP 1: DATA RETRIEVAL (SQL)
-    Generate the SQL to pull the time-series. Use \`SUM(MonthlyNetQty)\` for volume and \`SUM(MonthlyNetRevenue)\` for ranking. 
+    Generate the SQL to pull the time-series. 
+    - **CRITICAL**: You MUST include \`TimeKey\` and \`ProductName\` in your \`SELECT\` and \`GROUP BY\` clauses. If you omit \`TimeKey\`, the Python Statistical Model will silently fail and bypass the forecast.
+    - **CRITICAL**: NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
+
     *Example: Find top 30 products by revenue over 2 years.*
+    SELECT TimeKey, ProductName, SUM(MonthlyNetQty) AS Qty, SUM(MonthlyNetRevenue) AS Revenue
+    FROM v_AI_Time_Series_Feed
+    WHERE BranchName NOT LIKE '%TOP T%'
+      AND FiscalYear >= ${currentFiscalYear - 2}
+      AND ProductName IN (
+          SELECT TOP 30 ProductName
+          FROM v_AI_Time_Series_Feed
+          WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
+          GROUP BY ProductName
+          ORDER BY SUM(MonthlyNetRevenue) DESC
+      )
+    GROUP BY TimeKey, ProductName
+    ORDER BY ProductName, TimeKey ASC;
 
     ### STEP 2: STATISTICAL ANALYSIS (COGNITIVE)
     Once the data is returned, you must apply your internal **StatsModel reasoning**:
