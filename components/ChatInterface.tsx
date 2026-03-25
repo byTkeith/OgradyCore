@@ -52,7 +52,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
             return String(val);
         }
         // Quantities should be formatted as integers with no currency symbol
-        if (k.includes('qty') || k.includes('quantity') || k.includes('stock') || k.includes('target') || k.includes('count') || k.includes('onhand') || k.includes('warehouse')) {
+        if (k.includes('qty') || k.includes('quantity') || k.includes('stock') || k.includes('target') || k.includes('count') || k.includes('onhand') || k.includes('warehouse') || k.includes('volume')) {
             return val.toLocaleString(undefined, { 
                 minimumFractionDigits: 0, 
                 maximumFractionDigits: 0 
