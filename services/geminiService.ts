@@ -37,13 +37,16 @@ const getSystemInstruction = (now: string) => {
     - **PROHIBITED**: Never use \`CASE\`, \`AVG\`, or \`SUM(Price * Qty)\` in your SQL. 
     - **PROHIBITED**: Never look for a \`SuggestedStock\` or \`PerformanceStatus\` column. They do not exist.
     - **MANDATORY**: Only \`SELECT\` the raw monthly measures. The Statistical Model requires the full time-series to function.
-    - **TIME WINDOW**: Always pull at least 24 to 36 months of history to allow for seasonality detection.
+    - **TIME WINDOW**: Always pull at least 24 to 36 months of history to allow for seasonality detection (e.g., \`TimeKey >= 202401\`).
+    - **EXCLUSIONS**: Always use \`BranchName NOT LIKE '%TOP T%'\` to exclude Top T.
+    - **ACCURACY**: Always use \`SUM(CAST(MonthlyNetRevenue AS FLOAT))\` to prevent arithmetic overflow.
 
     ## 3. EXAMPLE PATTERN (CEO REQUEST: "Forecast for Value Coat")
     Your SQL should look exactly like this:
-    SELECT TimeKey, ProductName, SUM(MonthlyNetQty) AS Qty, SUM(MonthlyNetRevenue) AS Revenue
+    SELECT TimeKey, ProductName, SUM(CAST(MonthlyNetQty AS FLOAT)) AS Qty, SUM(CAST(MonthlyNetRevenue AS FLOAT)) AS Revenue
     FROM v_AI_Time_Series_Feed
     WHERE ProductName LIKE '%VALUE COAT%'
+    AND BranchName NOT LIKE '%TOP T%'
     GROUP BY TimeKey, ProductName
     ORDER BY TimeKey ASC;
 
@@ -217,10 +220,16 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       throw new Error(`Execution Error: ${executeRes.statusText}`);
     }
 
-    const { data } = await executeRes.json();
+    const executeData = await executeRes.json();
+    const data = executeData.data;
+    const statisticalForecasts = executeData.statistical_forecasts;
 
     // 3. Generate Insights with Gemini
-    const insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 20))}`;
+    let insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 20))}`;
+    if (statisticalForecasts) {
+      insightPrompt += `\n\nStatistical Model Forecasts (Holt-Winters): ${JSON.stringify(statisticalForecasts)}`;
+    }
+
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
@@ -229,6 +238,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
       - Offer actionable, data-driven decisions for the executive board.
+      - **CRITICAL FORECASTING RULE**: If the data contains "Statistical Model Forecasts (Holt-Winters)", you MUST use these exact numbers for your "SuggestedWeeklyStock" recommendations. Do not calculate them yourself. Present the model's findings clearly.
 
       >>>SUM
       Executive Summary: A high-impact, one-sentence strategic overview.
@@ -271,7 +281,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       strategicAnalysis: plan.strategicAnalysis,
       data,
       insight,
-      engine: `Gemini Paid (${modelName})`
+      engine: statisticalForecasts ? `Holt-Winters + Gemini Paid (${modelName})` : `Gemini Paid (${modelName})`
     };
 
   } catch (error: any) {
