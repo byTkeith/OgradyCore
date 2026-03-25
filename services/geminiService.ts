@@ -47,23 +47,30 @@ const getSystemInstruction = (now: string) => {
 
     ### STEP 1: DATA RETRIEVAL (SQL)
     Generate the SQL to pull the time-series. 
-    - **CRITICAL**: You MUST include \`TimeKey\` and \`ProductName\` in your \`SELECT\` and \`GROUP BY\` clauses. If you omit \`TimeKey\`, the Python Statistical Model will silently fail and bypass the forecast.
+    - **CRITICAL**: You MUST include \`TimeKey\`, \`PLUCode\`, \`ProductName\`, and \`PackSize\` in your \`SELECT\` and \`GROUP BY\` clauses. Forecasting requires SKU-level granularity.
     - **CRITICAL**: NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
 
     *Example: Find top 30 products by revenue over 2 years.*
-    SELECT TimeKey, ProductName, SUM(MonthlyNetQty) AS Qty, SUM(MonthlyNetRevenue) AS Revenue
-    FROM v_AI_Time_Series_Feed
-    WHERE BranchName NOT LIKE '%TOP T%'
-      AND FiscalYear >= ${currentFiscalYear - 2}
-      AND ProductName IN (
-          SELECT TOP 30 ProductName
-          FROM v_AI_Time_Series_Feed
-          WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
-          GROUP BY ProductName
-          ORDER BY SUM(MonthlyNetRevenue) DESC
-      )
-    GROUP BY TimeKey, ProductName
-    ORDER BY ProductName, TimeKey ASC;
+    WITH TopProducts AS (
+        SELECT TOP 30 PLUCode
+        FROM v_AI_Time_Series_Feed
+        WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
+        GROUP BY PLUCode
+        ORDER BY SUM(MonthlyNetRevenue) DESC
+    )
+    SELECT 
+        t.TimeKey, 
+        t.PLUCode,
+        t.ProductName,
+        t.PackSize,
+        SUM(t.MonthlyNetQty) AS Qty, 
+        SUM(t.MonthlyNetRevenue) AS Revenue
+    FROM v_AI_Time_Series_Feed t
+    INNER JOIN TopProducts tp ON t.PLUCode = tp.PLUCode
+    WHERE t.BranchName NOT LIKE '%TOP T%'
+      AND t.FiscalYear >= ${currentFiscalYear - 2}
+    GROUP BY t.TimeKey, t.PLUCode, t.ProductName, t.PackSize
+    ORDER BY t.PLUCode, t.TimeKey ASC;
 
     ### STEP 2: STATISTICAL ANALYSIS (COGNITIVE)
     Once the data is returned, you must apply your internal **StatsModel reasoning**:
