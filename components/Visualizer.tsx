@@ -2,7 +2,7 @@
 import React from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Legend
+  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Legend, LabelList
 } from 'recharts';
 import { QueryResult } from '../types';
 import { MOCK_CHART_COLORS } from '../constants';
@@ -35,7 +35,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return [value, name];
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse')) {
+      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume')) {
         return [value.toLocaleString(), name];
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
@@ -52,13 +52,20 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return String(value);
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse')) {
+      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume')) {
         return value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" });
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
         return `${value}%`;
       }
       return `R ${value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" })}`;
+    }
+    return value;
+  };
+
+  const xAxisFormatter = (value: any) => {
+    if (typeof value === 'string' && value.length > 20) {
+      return `${value.substring(0, 20)}...`;
     }
     return value;
   };
@@ -76,9 +83,9 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={0} tickFormatter={xAxisFormatter} />
                 <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip 
                   formatter={tooltipFormatter}
@@ -89,6 +96,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} />
                   ))}
+                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '9px' }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -99,9 +107,9 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <LineChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={0} tickFormatter={xAxisFormatter} />
                 <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Line 
@@ -112,7 +120,9 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   dot={{ r: 3, fill: '#10b981', strokeWidth: 0 }} 
                   activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} 
                   animationDuration={1500}
-                />
+                >
+                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '9px' }} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -122,7 +132,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 10, left: 0, bottom: 20 }}>
                 <Pie
                   data={chartData}
                   dataKey={yKey}
@@ -133,7 +143,8 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   outerRadius={80}
                   paddingAngle={5}
                   animationDuration={1500}
-                  label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${xAxisFormatter(name)} (${(percent * 100).toFixed(0)}%)`}
+                  labelLine={{ stroke: '#64748b', strokeWidth: 1 }}
                 >
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} stroke="rgba(0,0,0,0.3)" />
@@ -150,7 +161,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
                 <defs>
                   <linearGradient id="colorVis" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
@@ -158,10 +169,12 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={0} tickFormatter={xAxisFormatter} />
                 <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
-                <Area type="monotone" dataKey={yKey} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={2} animationDuration={1500} />
+                <Area type="monotone" dataKey={yKey} stroke="#3b82f6" fill="url(#colorVis)" strokeWidth={2} animationDuration={1500}>
+                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '9px' }} />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
