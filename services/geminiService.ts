@@ -39,7 +39,7 @@ const getSystemInstruction = (now: string) => {
     ## 2. INTEGRATED COLUMNS
     - If you need **Sales History**: Use \`Revenue\` or \`MonthlyQty\`.
     - If you need **Current Inventory**: Use \`CurrentWarehouseStock\`.
-    - If you need **Trends**: Use \`PerformanceStatus\`.
+    - If you need **Trends**: Calculate variance between \`MonthlyRevenue\` and \`LastYearRevenue\`.
 
     ## 3. TEMPORAL RULE
     - Always use \`WHERE TranDate <= CAST(GETDATE() AS DATE)\` to exclude future date pollution (year 2085).
@@ -142,7 +142,7 @@ const getSystemInstruction = (now: string) => {
     - **Example**: \`WHERE FiscalYear BETWEEN 2021 AND 2025\`.
 
     ## 2. STATISTICAL REASONING
-    Do not just fetch \`SuggestedWeeklySafetyStock\`. Use it as a BASELINE. 
+    Do not just fetch a single column. You must calculate the BASELINE from historical data. 
     To provide an "Advanced Forecast," you must:
     1.  **Analyze Seasonality**: Look at the last 3 years of \`LastYearSameMonthQty\`. Is there a recurring spike?
     2.  **Analyze Trajectory**: Compare the current \`MonthlyQty\` against the 5-year average.
@@ -160,11 +160,11 @@ const getSystemInstruction = (now: string) => {
 
     ## 2. THE STATISTICAL FORECASTING LOOP
     When the CEO asks for "Recommended Stock":
-    - **Query**: SELECT TOP 24 ProductName, TimeKey, SUM(MonthlyQty), MAX(LastYearSameMonthQty), MAX(PerformanceStatus)
+    - **Query**: SELECT TOP 24 ProductName, TimeKey, SUM(MonthlyQty), MAX(LastYearSameMonthQty)
     - **Analyze**: Look for the **Seasonality Factor**. (Is the current month historically higher or lower than the rest of the year?)
     - **Calculate**: 
       - Identify the average weekly run-rate from the last 3 months.
-      - If the \`PerformanceStatus\` is 'GROWING', apply a 1.25x growth multiplier.
+      - If the calculated status is 'GROWING', apply a 1.25x growth multiplier.
       - If the product shows high variance (volatility), add a 15% safety buffer.
     - **Result**: Output a single integer representing the suggested units to keep on hand. **NEVER use currency symbols for quantity.**
 
