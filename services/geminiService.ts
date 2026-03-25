@@ -43,9 +43,30 @@ const getSystemInstruction = (now: string) => {
     ## 3. FORECASTING PROTOCOL (THE STATS PIPELINE)
     - When a prompt contains "Forecast":
       1. Generate SQL from \`v_AI_Forecasting_Feed\` for the requested time period.
-      2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\`, \`PLUCode\`, \`ProductName\`, and \`PackSize\` in the \`SELECT\` and \`GROUP BY\` for Forecasts. The Python Statistical Model requires chronological data to calculate the \`SuggestedWeeklyStock\`. (The Python backend will bundle the final output for you).
+      2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in the \`SELECT\` and \`GROUP BY\` for Forecasts. The Python Statistical Model requires chronological data to calculate the \`SuggestedWeeklyStock\`. (The Python backend will bundle the final output for you).
       3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
       4. Hand this data to the **Statistical Model** by simply outputting the SQL.
+      
+      *Example: Forecast top 30 products by revenue over 2 years.*
+      WITH TopProducts AS (
+          SELECT TOP 30 ProductName
+          FROM v_AI_Forecasting_Feed
+          WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
+          GROUP BY ProductName
+          ORDER BY SUM(MonthlyNetRevenue) DESC
+      )
+      SELECT 
+          t.TimeKey, 
+          t.ProductName,
+          SUM(t.MonthlyNetQty) AS Qty, 
+          SUM(t.MonthlyNetRevenue) AS Revenue
+      FROM v_AI_Forecasting_Feed t
+      INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
+      WHERE t.BranchName NOT LIKE '%TOP T%'
+        AND t.FiscalYear >= ${currentFiscalYear - 2}
+      GROUP BY t.TimeKey, t.ProductName
+      ORDER BY t.ProductName, t.TimeKey ASC;
+      
       5. The model returns the \`SuggestedWeeklyStock\`.
       6. Display the result: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
 
@@ -230,13 +251,13 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     }
 
     const executeData = await executeRes.json();
-    const data = executeData.data;
     const statisticalForecasts = executeData.statistical_forecasts;
+    const data = statisticalForecasts || executeData.data;
 
     // 3. Generate Insights with Gemini
     let insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 20))}`;
     if (statisticalForecasts) {
-      insightPrompt += `\n\nStatistical Model Forecasts (Holt-Winters): ${JSON.stringify(statisticalForecasts)}`;
+      insightPrompt += `\n\nNote: The data provided above is the output of the Holt-Winters Statistical Model. Use these exact numbers for your "SuggestedWeeklyStock" recommendations.`;
     }
 
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
