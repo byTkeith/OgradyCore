@@ -83,7 +83,7 @@ const getSystemInstruction = (now: string) => {
       \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
 
     ## 6. EXCLUSIONS
-    - Always use \`WHERE BranchName NOT LIKE '%TOP T%'\` for branch exclusions.
+    - use \`WHERE BranchName NOT LIKE '%TOP T%'\` for branch exclusions.
 
     ## OUTPUT FORMAT (TUNE)
     Strictly follow this format (no markdown backticks):
