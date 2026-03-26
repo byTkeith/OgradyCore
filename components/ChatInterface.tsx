@@ -74,7 +74,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
         }
         
         // Percentages should be formatted with a % sign
-        if (k.includes('percent') || k.includes('%') || k.includes('pct') || k.includes('margin') || k.includes('variance') || k.includes('rate')) {
+        if (k.includes('percent') || k.includes('%') || k.includes('pct') || k.includes('margin') || k.includes('variance') || k.includes('rate') || k.includes('contribution') || k.includes('share')) {
             return val.toLocaleString(undefined, { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2 
