@@ -45,14 +45,28 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
   }, {} as Record<string, number>);
 
   const formatVal = (val: any, key?: string) => {
+    const k = (key || '').toLowerCase();
+    const isVolumeField = k.includes('qty') || k.includes('quantity') || k.includes('stock') || k.includes('target') || k.includes('count') || k.includes('onhand') || k.includes('warehouse') || k.includes('volume');
+
+    // Handle strings that might be pre-formatted as currency but should be integers (like Volume)
+    if (typeof val === 'string' && isVolumeField && (val.includes('R') || val.includes('$'))) {
+      const numericStr = val.replace(/[R$\s,]/g, '');
+      const num = parseFloat(numericStr);
+      if (!isNaN(num)) {
+        return num.toLocaleString(undefined, { 
+          minimumFractionDigits: 0, 
+          maximumFractionDigits: 0 
+        });
+      }
+    }
+
     if (typeof val === 'number') {
-        const k = (key || '').toLowerCase();
         // TimeKey, Year, Month should be treated as labels/integers, not money
         if (k.includes('timekey') || k.includes('year') || k.includes('month')) {
             return String(val);
         }
         // Quantities should be formatted as integers with no currency symbol
-        if (k.includes('qty') || k.includes('quantity') || k.includes('stock') || k.includes('target') || k.includes('count') || k.includes('onhand') || k.includes('warehouse') || k.includes('volume')) {
+        if (isVolumeField) {
             return val.toLocaleString(undefined, { 
                 minimumFractionDigits: 0, 
                 maximumFractionDigits: 0 
@@ -101,6 +115,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-black/20 text-slate-500 font-black uppercase tracking-tighter">
+                <th className="px-4 py-3 w-12 text-center border-r border-slate-800 bg-slate-900/40">#</th>
                 {allKeys.map(key => (
                    <th key={key} className={`px-4 py-3 whitespace-nowrap ${typeof data[0][key] === 'number' ? 'text-right' : ''}`}>
                       {key}
@@ -111,6 +126,7 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
             <tbody className="divide-y divide-slate-800">
               {data.slice(0, 50).map((row, i) => (
                 <tr key={i} className="hover:bg-emerald-500/5 transition-colors">
+                  <td className="px-4 py-3 text-center text-emerald-500 font-black font-mono text-xs border-r border-slate-800 bg-slate-900/20">{i + 1}</td>
                   {allKeys.map(key => (
                      <td key={key} className={`px-4 py-3 ${typeof row[key] === 'number' ? 'text-right text-emerald-400 font-mono font-bold whitespace-nowrap' : 'text-slate-300 font-medium'}`}>
                         {formatVal(row[key], key)}
@@ -120,11 +136,10 @@ const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({
               ))}
             </tbody>
           </table>
-          {data.length > 50 && (
-            <div className="p-4 text-center bg-black/10 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-t border-slate-800">
-              Showing first 50 of {data.length} records. Scroll for more in the database.
-            </div>
-          )}
+          <div className="p-4 flex justify-between items-center bg-black/10 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-t border-slate-800">
+            <span>Total Records: {data.length}</span>
+            {data.length > 50 && <span>Showing first 50 records</span>}
+          </div>
         </div>
       </div>
     </div>
@@ -188,7 +203,7 @@ const ChatInterface: React.FC = () => {
       // Header Function
       const addHeader = (p: any) => {
         p.setFillColor(15, 23, 42); // slate-900
-        p.rect(0, 0, pdfWidth, 20, 'F');
+        p.rect(0, 0, pdfWidth, 25, 'F'); // Increased height to 25 to match topMargin
         p.setTextColor(255, 255, 255);
         p.setFontSize(10);
         p.setFont("helvetica", "bold");
@@ -201,6 +216,10 @@ const ChatInterface: React.FC = () => {
 
       // Footer Function
       const addFooter = (p: any, pageNum: number) => {
+        // Draw a solid background rectangle to mask any image bleed from above
+        p.setFillColor(2, 6, 23); // slate-950 (matching the app background)
+        p.rect(0, pdfHeight - 20, pdfWidth, 20, 'F');
+        
         p.setFontSize(8);
         p.setTextColor(148, 163, 184);
         p.text(`Page ${pageNum}`, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
@@ -208,20 +227,27 @@ const ChatInterface: React.FC = () => {
       };
 
       // Add first page
-      addHeader(pdf);
-      pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imgHeight, undefined, 'FAST');
-      addFooter(pdf, page);
+      const topMargin = 25;
+      const footerMargin = 20;
+      const pageContentHeight = pdfHeight - topMargin - footerMargin;
+      
+      pdf.addImage(imgData, 'PNG', margin, topMargin, contentWidth, imgHeight, undefined, 'FAST');
+      addHeader(pdf); // Add header AFTER image to mask top bleed
+      addFooter(pdf, page); // Add footer AFTER image to mask bottom bleed
 
-      heightLeft -= (pdfHeight - 35); // Initial page content height
+      heightLeft -= pageContentHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight + 20; // Shift image up
         pdf.addPage();
         page++;
-        addHeader(pdf);
-        pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imgHeight, undefined, 'FAST');
-        addFooter(pdf, page);
-        heightLeft -= (pdfHeight - 35);
+        
+        // Calculate position to show the next segment of the image
+        const shift = (page - 1) * pageContentHeight;
+        pdf.addImage(imgData, 'PNG', margin, topMargin - shift, contentWidth, imgHeight, undefined, 'FAST');
+        
+        addHeader(pdf); // Add header AFTER image to mask top bleed
+        addFooter(pdf, page); // Add footer AFTER image to mask bottom bleed
+        heightLeft -= pageContentHeight;
       }
 
       const fileName = `Ogrady_Report_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;

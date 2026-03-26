@@ -30,12 +30,14 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
   const { xKey, yKey } = resolveKeys();
 
   const tooltipFormatter = (value: any, name: string) => {
+    const n = name.toLowerCase();
+    const isVolume = n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume');
+
     if (typeof value === 'number') {
-      const n = name.toLowerCase();
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return [value, name];
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume')) {
+      if (isVolume) {
         return [value.toLocaleString(), name];
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
@@ -43,16 +45,26 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
       }
       return [`R ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name];
     }
+
+    // Handle string values that might be pre-formatted
+    if (typeof value === 'string' && isVolume && (value.includes('R') || value.includes('$'))) {
+      const numericStr = value.replace(/[R$\s,]/g, '');
+      const num = parseFloat(numericStr);
+      if (!isNaN(num)) return [num.toLocaleString(), name];
+    }
+
     return [value, name];
   };
 
   const yAxisFormatter = (value: any) => {
+    const n = yKey.toLowerCase();
+    const isVolume = n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume');
+
     if (typeof value === 'number') {
-      const n = yKey.toLowerCase();
       if (n.includes('timekey') || n.includes('year') || n.includes('month')) {
         return String(value);
       }
-      if (n.includes('qty') || n.includes('quantity') || n.includes('stock') || n.includes('target') || n.includes('count') || n.includes('onhand') || n.includes('warehouse') || n.includes('volume')) {
+      if (isVolume) {
         return value.toLocaleString(undefined, { notation: "compact", compactDisplay: "short" });
       }
       if (n.includes('percent') || n.includes('%') || n.includes('pct') || n.includes('margin') || n.includes('variance') || n.includes('rate')) {
@@ -83,9 +95,19 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
+              <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={0} tickFormatter={xAxisFormatter} />
+                <XAxis 
+                  dataKey={xKey} 
+                  stroke="#64748b" 
+                  fontSize={chartData.length > 10 ? 8 : 9} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  angle={-45} 
+                  textAnchor="end" 
+                  interval={0} 
+                  tickFormatter={xAxisFormatter} 
+                />
                 <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip 
                   formatter={tooltipFormatter}
@@ -96,7 +118,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={MOCK_CHART_COLORS[index % MOCK_CHART_COLORS.length]} />
                   ))}
-                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '9px' }} />
+                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '8px' }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -107,9 +129,19 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
           <div className="h-full w-full flex flex-col">
             {title && <p className="text-[9px] font-bold text-slate-500 uppercase mb-2 text-center">{title}</p>}
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
+              <LineChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={0} tickFormatter={xAxisFormatter} />
+                <XAxis 
+                  dataKey={xKey} 
+                  stroke="#64748b" 
+                  fontSize={chartData.length > 10 ? 8 : 9} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  angle={-45} 
+                  textAnchor="end" 
+                  interval={0} 
+                  tickFormatter={xAxisFormatter} 
+                />
                 <YAxis tickFormatter={yAxisFormatter} stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                 <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
                 <Line 
@@ -121,7 +153,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ result }) => {
                   activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} 
                   animationDuration={1500}
                 >
-                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '9px' }} />
+                  <LabelList dataKey={yKey} position="top" formatter={yAxisFormatter} style={{ fill: '#94a3b8', fontSize: '8px' }} />
                 </Line>
               </LineChart>
             </ResponsiveContainer>
