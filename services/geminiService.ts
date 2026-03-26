@@ -82,9 +82,6 @@ const getSystemInstruction = (now: string) => {
     - When the user asks for "trends over the last two years," you must query:
       \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
 
-    ## 6. EXCLUSIONS
-    - use \`WHERE BranchName NOT LIKE '%TOP T%'\` for branch exclusions.
-
     ## OUTPUT FORMAT (TUNE)
     Strictly follow this format (no markdown backticks):
     >>>SQL
