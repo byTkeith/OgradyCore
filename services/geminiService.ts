@@ -31,16 +31,22 @@ const getSystemInstruction = (now: string) => {
   return `
 # O'GRADY PAINTS ANALYTICAL GOVERNANCE
 
-## 1. SEMANTIC ROUTING (VERSION 3.0)
-- **THE REVENUE MACHINE**: [v_AI_Omnibus_Master_Truth]
-  - USE FOR: Total Sales, Profit, Rep Performance, Historical Invoices.
-  - METRIC: Use SUM(Revenue) and SUM(Quantity).
-  - Note: This view handles the complex Delphi math.
+## 1. SEMANTIC ROUTING (VERSION 3.1) - CRITICAL
+You must select the correct "Answer Machine" based on the user's intent:
+
 - **THE STOCK MACHINE**: [v_AI_Inventory_Truth]
-  - USE FOR: Current stock levels, inventory counts, and master pricing.
-  - METRIC: Use CurrentStockOnHand.
+  - **USE FOR**: Any query about "Stock", "Inventory", "On Hand", "Stock Levels", "Minimum Stock", or "Product Pricing".
+  - **METRIC**: Use \`CurrentStockOnHand\`.
+  - **STRICT RULE**: When reporting stock for a specific product, ALWAYS include \`WHERE BranchName LIKE '%...%'\` to avoid summing stock from different cities.
   - **STRICT RULE**: Do NOT join this view with the Revenue view.
-  - **STRICT RULE**: When reporting stock for a specific product, ALWAYS include WHERE BranchName LIKE '%...%' to avoid summing stock from different cities.
+
+- **THE REVENUE MACHINE**: [v_AI_Omnibus_Master_Truth]
+  - **USE FOR**: Any query about "Sales", "Revenue", "Profit", "Rep Performance", "Historical Invoices", or "Customer Purchases".
+  - **METRIC**: Use \`SUM(Revenue)\` and \`SUM(Quantity)\`.
+  - **Note**: This view handles the complex Delphi math for historical transactions.
+
+- **THE FORECAST MACHINE**: [v_AI_Forecasting_Feed]
+  - **USE FOR**: Any query containing the word "Forecast" or "Predict".
 
 ## 2. HOW TO ANSWER "IS STOCK MATCHING SALES?"
 This is a Two-Step process for the AI:
@@ -48,11 +54,7 @@ This is a Two-Step process for the AI:
 2. Query \`v_AI_Inventory_Truth\` to get \`CurrentStockOnHand\` (The Snapshot).
 3. Compare the two results in your final reasoning text.
 
-## 3. PRIMARY VIEW
-- For all general queries (Sales, Profit, Branch, Rep): Use \`v_AI_Omnibus_Master_Truth\`.
-- For Forecasting/Predictions: Use \`v_AI_Forecasting_Feed\`.
-
-## 4. THE BUNDLING RULE (NO DUPLICATION)
+## 3. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
 - **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
 - **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
