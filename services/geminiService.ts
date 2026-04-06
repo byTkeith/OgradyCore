@@ -20,8 +20,8 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const stockCols = getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || []);
-  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["SiteID", "BranchName", "PLUCode", "ProductName", "CurrentStockOnHand", "MinimumStockLevel", "PackSize"]);
+  const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
+  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
   const currentMonth = currentDate.getMonth() + 1;
@@ -29,32 +29,26 @@ const getSystemInstruction = (now: string) => {
   const currentFiscalYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
   return `
-# O'GRADY PAINTS ANALYTICAL GOVERNANCE
+# O'GRADY PAINTS ARCHITECTURAL ROUTING
 
-## 1. SEMANTIC ROUTING (VERSION 3.1) - CRITICAL
-You must select the correct "Answer Machine" based on the user's intent:
+## 1. SALES & PROFIT ENGINE: [v_AI_Sales_Performance]
+- **TRIGGER**: Use this for "How much did we sell," "What is our profit," "Rep rankings," or "Historical invoices."
+- **KEY COLUMNS**: \`Revenue\`, \`Quantity\`, \`GrossProfit\`, \`BranchName\`, \`ProductName\`.
+- **Note**: This view has **ZERO** information about current stock levels.
 
-- **THE STOCK MACHINE**: [v_AI_Inventory_Truth]
-  - **USE FOR**: Any query about "Stock", "Inventory", "On Hand", "Stock Levels", "Minimum Stock", or "Product Pricing".
-  - **METRIC**: Use \`CurrentStockOnHand\`.
-  - **STRICT RULE**: When reporting stock for a specific product, ALWAYS include \`WHERE BranchName LIKE '%...%'\` to avoid summing stock from different cities.
-  - **STRICT RULE**: Do NOT join this view with the Revenue view.
+## 2. INVENTORY & STOCK ENGINE: [v_AI_Inventory_Truth]
+- **TRIGGER**: Use this for "What is our stock on hand," "Check inventory," or "Find discrepancies."
+- **KEY COLUMNS**: 
+    - \`Warehouse_Stock_Count\`: The physical count in the warehouse master.
+    - \`Ledger_Stock_Count\`: The theoretical count based on the last transaction.
+    - \`Stock_Drift_Discrepancy\`: Use this to answer "Is our stock correct?"
 
-- **THE REVENUE MACHINE**: [v_AI_Omnibus_Master_Truth]
-  - **USE FOR**: Any query about "Sales", "Revenue", "Profit", "Rep Performance", "Historical Invoices", or "Customer Purchases".
-  - **METRIC**: Use \`SUM(Revenue)\` and \`SUM(Quantity)\`.
-  - **Note**: This view handles the complex Delphi math for historical transactions.
+## 3. RULES FOR THE AI AGENT:
+- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
+- **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
+- **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
 
-- **THE FORECAST MACHINE**: [v_AI_Forecasting_Feed]
-  - **USE FOR**: Any query containing the word "Forecast" or "Predict".
-
-## 2. HOW TO ANSWER "IS STOCK MATCHING SALES?"
-This is a Two-Step process for the AI:
-1. Query \`v_AI_Omnibus_Master_Truth\` to get \`SUM(Quantity)\` (The Sales Velocity).
-2. Query \`v_AI_Inventory_Truth\` to get \`CurrentStockOnHand\` (The Snapshot).
-3. Compare the two results in your final reasoning text.
-
-## 3. THE BUNDLING RULE (NO DUPLICATION)
+## 4. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
 - **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
 - **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
@@ -139,12 +133,13 @@ Brief Summary...
 - Suggestion 1
 
 # VIEW SCHEMAS
+- [v_AI_Sales_Performance]: ${salesPerformanceCols}
+- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
 - [v_AI_Forecasting_Feed]: ${getCols("v_AI_Forecasting_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Time_Series_Feed]: ${getCols("v_AI_Time_Series_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
-- [v_AI_Omnibus_Master_Truth]: ${getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || [])}
-- [v_AI_Stock_Catalog]: ${stockCols}
-- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
+- [v_AI_Omnibus_Master_Truth]: ${masterCols}
+- [v_AI_Stock_Catalog]: ${getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || [])}
 `;
 };
 
