@@ -21,7 +21,7 @@ const getSystemInstruction = (now: string) => {
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
-  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName"]);
+  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName", "LastStockUpdateDate"]);
 
   const currentDate = new Date(now);
   const currentMonth = currentDate.getMonth() + 1;
@@ -44,11 +44,35 @@ const getSystemInstruction = (now: string) => {
     - \`Stock_Drift_Discrepancy\`: Use this to answer "Is our stock correct?"
 
 ## 3. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the v_AI_Omnibus_Master_Truth view. 
+- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
+- **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons to prevent data type conversion errors (e.g., \`CAST(SalesRep AS VARCHAR) = '...' \`).
 
-## 4. THE BUNDLING RULE (NO DUPLICATION)
+## 4. INVENTORY AUDIT PROTOCOL
+
+### 1. HISTORICAL STOCK (ON A SPECIFIC DATE)
+If the user asks "How much stock was there on [DATE]":
+- **VIEW**: Use \`v_AI_Omnibus_Master_Truth\`.
+- **LOGIC**: You must find the most recent transaction for that product on or before that date.
+- **SQL**: 
+  \`\`\`sql
+  SELECT TOP 1 ProductName, Stock_OnHand_Ledger_Snapshot 
+  FROM v_AI_Omnibus_Master_Truth 
+  WHERE ProductName LIKE '%...%' AND TranDate <= 'YYYY-MM-DD' 
+  ORDER BY TranDate DESC
+  \`\`\`
+
+### 2. CURRENT STOCK (WAREHOUSE VS LEDGER)
+If the user asks for "Current stock" or "Inventory check":
+- **VIEW**: Use \`v_AI_Inventory_Truth\`.
+- **COLUMNS**: Use \`Warehouse_Stock_Count\` (Physical) and \`Ledger_Stock_Count\` (System).
+- **MATH**: Use \`MAX()\` or \`TOP 1\` per product. NEVER use \`SUM()\` for stock counts unless the user asks for a "Total across all products."
+
+### 3. TYPE SAFETY
+- **CRITICAL**: The database uses Alphanumeric IDs. Always use \`LIKE\` or wrap IDs in single quotes.
+
+## 5. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
 - **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
 - **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
@@ -288,6 +312,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
+      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
