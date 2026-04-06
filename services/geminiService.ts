@@ -51,7 +51,7 @@ const getSystemInstruction = (now: string) => {
       WITH TopProducts AS (
           SELECT TOP 30 ProductName
           FROM v_AI_Forecasting_Feed
-          WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
+          FiscalYear >= ${currentFiscalYear - 2}
           GROUP BY ProductName
           ORDER BY SUM(MonthlyNetRevenue) DESC
       )
@@ -62,8 +62,7 @@ const getSystemInstruction = (now: string) => {
           SUM(t.MonthlyNetRevenue) AS Revenue
       FROM v_AI_Forecasting_Feed t
       INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
-      WHERE t.BranchName NOT LIKE '%TOP T%'
-        AND t.FiscalYear >= ${currentFiscalYear - 2}
+      WHERE t.FiscalYear >= ${currentFiscalYear - 2}
       GROUP BY t.TimeKey, t.ProductName
       ORDER BY t.ProductName, t.TimeKey ASC;
       
@@ -83,7 +82,7 @@ const getSystemInstruction = (now: string) => {
       \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
 
     ## 6. EXCLUSIONS
-    - Always use \`WHERE BranchName NOT LIKE '%TOP T%'\` for branch exclusions.
+    
 
     ## 7. INVENTORY TRACKING PROTOCOL
     - **KEY COLUMNS**:
