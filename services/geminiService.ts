@@ -44,7 +44,7 @@ const getSystemInstruction = (now: string) => {
     - \`Stock_Drift_Discrepancy\`: Use this to answer "Is our stock correct?"
 
 ## 3. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
+- **NO CROSS-OVER**: Never try to find stock in the v_AI_Omnibus_Master_Truth view. 
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
 
@@ -288,7 +288,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
-      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
