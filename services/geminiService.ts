@@ -51,7 +51,7 @@ const getSystemInstruction = (now: string) => {
       WITH TopProducts AS (
           SELECT TOP 30 ProductName
           FROM v_AI_Forecasting_Feed
-          WHERE FiscalYear >= ${currentFiscalYear - 2}
+          WHERE BranchName NOT LIKE '%TOP T%' AND FiscalYear >= ${currentFiscalYear - 2}
           GROUP BY ProductName
           ORDER BY SUM(MonthlyNetRevenue) DESC
       )
@@ -62,7 +62,8 @@ const getSystemInstruction = (now: string) => {
           SUM(t.MonthlyNetRevenue) AS Revenue
       FROM v_AI_Forecasting_Feed t
       INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
-      WHERE t.FiscalYear >= ${currentFiscalYear - 2}
+      WHERE t.BranchName NOT LIKE '%TOP T%'
+        AND t.FiscalYear >= ${currentFiscalYear - 2}
       GROUP BY t.TimeKey, t.ProductName
       ORDER BY t.ProductName, t.TimeKey ASC;
       
@@ -80,6 +81,21 @@ const getSystemInstruction = (now: string) => {
     - The current Fiscal Year is **${currentFiscalYear}**.
     - When the user asks for "trends over the last two years," you must query:
       \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
+
+    ## 6. EXCLUSIONS
+    - Always use \`WHERE BranchName NOT LIKE '%TOP T%'\` for branch exclusions.
+
+    ## 7. INVENTORY TRACKING PROTOCOL
+    - **KEY COLUMNS**:
+      - \`CurrentStockOnHand\`: Use this for the current physical stock in the factory.
+      - \`StockAtTimeOfSale\`: Use this for historical audits of stock levels on specific dates.
+      - \`MinimumStockLevel\`: The safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
+      - \`Quantity\`: The amount of stock currently moving (Sales velocity).
+    - **ANALYSIS PATTERN**:
+      When asked "Is our stock matching our sales?":
+      1. Query \`SUM(Quantity)\` to see the movement velocity.
+      2. Query \`MAX(CurrentStockOnHand)\` to see the current availability.
+      3. Compare the two to determine "Weeks of Cover."
 
     ## OUTPUT FORMAT (TUNE)
     Strictly follow this format (no markdown backticks):
@@ -259,10 +275,14 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
-      - Use ZAR (R) for currency references.
+      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
+      - **SUPPLY CHAIN HEALTH CHECK**:
+        - Inventory Coverage: \`CurrentStockOnHand / WeeklySalesVelocity\`.
+        - Stock-out Risk: If \`CurrentStockOnHand < MinimumStockLevel\`.
+        - Replenishment Accuracy: Compare \`StockAtTimeOfSale\` against \`Quantity\` sold to identify lost sales due to empty factory.
       - Offer actionable, data-driven decisions for the executive board.
       - **CRITICAL FORECASTING RULE**: If the data contains "Statistical Model Forecasts (Holt-Winters)", you MUST use these exact numbers for your "SuggestedWeeklyStock" recommendations. Do not calculate them yourself. Present the model's findings clearly.
 
