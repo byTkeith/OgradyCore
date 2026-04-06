@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
@@ -22,6 +21,7 @@ const getSystemInstruction = (now: string) => {
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
   const stockCols = getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || []);
+  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["SiteID", "BranchName", "PLUCode", "ProductName", "CurrentStockOnHand", "MinimumStockLevel", "PackSize"]);
 
   const currentDate = new Date(now);
   const currentMonth = currentDate.getMonth() + 1;
@@ -29,104 +29,121 @@ const getSystemInstruction = (now: string) => {
   const currentFiscalYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
   return `
-    # O'GRADY PAINTS ANALYTICAL GOVERNANCE
+# O'GRADY PAINTS ANALYTICAL GOVERNANCE
 
-    ## 1. PRIMARY VIEW
-    - For all general queries (Sales, Profit, Branch, Rep): Use \`v_AI_Omnibus_Master_Truth\`.
-    - For Forecasting/Predictions: Use \`v_AI_Forecasting_Feed\`.
+## 1. SEMANTIC ROUTING (VERSION 3.0)
+- **THE REVENUE MACHINE**: [v_AI_Omnibus_Master_Truth]
+  - USE FOR: Total Sales, Profit, Rep Performance, Historical Invoices.
+  - METRIC: Use SUM(Revenue) and SUM(Quantity).
+  - Note: This view handles the complex Delphi math.
+- **THE STOCK MACHINE**: [v_AI_Inventory_Truth]
+  - USE FOR: Current stock levels, inventory counts, and master pricing.
+  - METRIC: Use CurrentStockOnHand.
+  - **STRICT RULE**: Do NOT join this view with the Revenue view.
+  - **STRICT RULE**: When reporting stock for a specific product, ALWAYS include WHERE BranchName LIKE '%...%' to avoid summing stock from different cities.
 
-    ## 2. THE BUNDLING RULE (NO DUPLICATION)
-    - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
-    - **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
-    - **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
+## 2. HOW TO ANSWER "IS STOCK MATCHING SALES?"
+This is a Two-Step process for the AI:
+1. Query \`v_AI_Omnibus_Master_Truth\` to get \`SUM(Quantity)\` (The Sales Velocity).
+2. Query \`v_AI_Inventory_Truth\` to get \`CurrentStockOnHand\` (The Snapshot).
+3. Compare the two results in your final reasoning text.
 
-    ## 3. FORECASTING PROTOCOL (THE STATS PIPELINE)
-    - When a prompt contains "Forecast":
-      1. Generate SQL from \`v_AI_Forecasting_Feed\` for the requested time period.
-      2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in the \`SELECT\` and \`GROUP BY\` for Forecasts. The Python Statistical Model requires chronological data to calculate the \`SuggestedWeeklyStock\`. (The Python backend will bundle the final output for you).
-      3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
-      4. Hand this data to the **Statistical Model** by simply outputting the SQL.
-      
-      *Example: Forecast top 30 products by revenue over 2 years.*
-      WITH TopProducts AS (
-          SELECT TOP 30 ProductName
-          FROM v_AI_Forecasting_Feed
-          FiscalYear >= ${currentFiscalYear - 2}
-          GROUP BY ProductName
-          ORDER BY SUM(MonthlyNetRevenue) DESC
-      )
-      SELECT 
-          t.TimeKey, 
-          t.ProductName,
-          SUM(t.MonthlyNetQty) AS Qty, 
-          SUM(t.MonthlyNetRevenue) AS Revenue
-      FROM v_AI_Forecasting_Feed t
-      INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
-      WHERE t.FiscalYear >= ${currentFiscalYear - 2}
-      GROUP BY t.TimeKey, t.ProductName
-      ORDER BY t.ProductName, t.TimeKey ASC;
-      
-      5. The model returns the \`SuggestedWeeklyStock\`.
-      6. Display the result: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
+## 3. PRIMARY VIEW
+- For all general queries (Sales, Profit, Branch, Rep): Use \`v_AI_Omnibus_Master_Truth\`.
+- For Forecasting/Predictions: Use \`v_AI_Forecasting_Feed\`.
 
-    ## 4. SEMANTIC MAPPING (SYNONYMS)
-    - Always use \`LIKE '%...%'\` for \`ProductName\` and \`BranchName\`.
-    - \`BranchName\` and \`CustomerName\` are identical.
-    - \`MonthlyRevenue\`, \`Revenue\`, and \`NetRevenue\` are identical.
-    - **Pack Sizes**: Ignore the \`PackSize\` (Description2) unless the user specifically asks for "5L" or "20L". Do not group by it by default.
+## 4. THE BUNDLING RULE (NO DUPLICATION)
+- **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
+- **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
+- **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
 
-    ## 5. THE FISCAL MANDATE
-    - The business runs on a **March 1st - February 28th** Fiscal Year.
-    - The current Fiscal Year is **${currentFiscalYear}**.
-    - When the user asks for "trends over the last two years," you must query:
-      \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
+## 5. FORECASTING PROTOCOL (THE STATS PIPELINE)
+- When a prompt contains "Forecast":
+  1. Generate SQL from \`v_AI_Forecasting_Feed\` for the requested time period.
+  2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in the \`SELECT\` and \`GROUP BY\` for Forecasts. The Python Statistical Model requires chronological data to calculate the \`SuggestedWeeklyStock\`. (The Python backend will bundle the final output for you).
+  3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
+  4. Hand this data to the **Statistical Model** by simply outputting the SQL.
+  
+  *Example: Forecast top 30 products by revenue over 2 years.*
+  WITH TopProducts AS (
+      SELECT TOP 30 ProductName
+      FROM v_AI_Forecasting_Feed
+      WHERE FiscalYear >= ${currentFiscalYear - 2}
+      GROUP BY ProductName
+      ORDER BY SUM(MonthlyNetRevenue) DESC
+  )
+  SELECT 
+      t.TimeKey, 
+      t.ProductName,
+      SUM(t.MonthlyNetQty) AS Qty, 
+      SUM(t.MonthlyNetRevenue) AS Revenue
+  FROM v_AI_Forecasting_Feed t
+  INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
+  WHERE t.FiscalYear >= ${currentFiscalYear - 2}
+  GROUP BY t.TimeKey, t.ProductName
+  ORDER BY t.ProductName, t.TimeKey ASC;
+  
+  5. The model returns the \`SuggestedWeeklyStock\`.
+  6. Display the result: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
 
-    ## 6. EXCLUSIONS
-    
+## 6. SEMANTIC MAPPING (SYNONYMS)
+- Always use \`LIKE '%...%'\` for \`ProductName\` and \`BranchName\`.
+- \`BranchName\` and \`CustomerName\` are identical.
+- \`MonthlyRevenue\`, \`Revenue\`, and \`NetRevenue\` are identical.
+- **Pack Sizes**: Ignore the \`PackSize\` (Description2) unless the user specifically asks for "5L" or "20L". Do not group by it by default.
 
-    ## 7. INVENTORY TRACKING PROTOCOL
-    - **KEY COLUMNS**:
-      - \`CurrentStockOnHand\`: Use this for the current physical stock in the factory.
-      - \`StockAtTimeOfSale\`: Use this for historical audits of stock levels on specific dates.
-      - \`MinimumStockLevel\`: The safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
-      - \`Quantity\`: The amount of stock currently moving (Sales velocity).
-    - **ANALYSIS PATTERN**:
-      When asked "Is our stock matching our sales?":
-      1. Query \`SUM(Quantity)\` to see the movement velocity.
-      2. Query \`MAX(CurrentStockOnHand)\` to see the current availability.
-      3. Compare the two to determine "Weeks of Cover."
+## 7. THE FISCAL MANDATE
+- The business runs on a **March 1st - February 28th** Fiscal Year.
+- The current Fiscal Year is **${currentFiscalYear}**.
+- When the user asks for "trends over the last two years," you must query:
+  \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
 
-    ## OUTPUT FORMAT (TUNE)
-    Strictly follow this format (no markdown backticks):
-    >>>SQL
-    SELECT ...
-    >>>EXP
-    Explanation...
-    >>>STRAT
-    Strategic Analysis (Explain the trend and why the recommendation differs from a simple average)...
-    >>>VIZ
-    bar|line|pie|area
-    >>>X
-    ColumnNameForX
-    >>>Y
-    ColumnNameForY
-    >>>SUM
-    Brief Summary...
-    >>>TRD
-    - Trend 1
-    - Trend 2
-    >>>RSK
-    - Risk 1
-    >>>STR
-    - Suggestion 1
+## 8. EXCLUSIONS
 
-    # VIEW SCHEMAS
-    - [v_AI_Forecasting_Feed]: ${getCols("v_AI_Forecasting_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
-    - [v_AI_Time_Series_Feed]: ${getCols("v_AI_Time_Series_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
-    - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
-    - [v_AI_Omnibus_Master_Truth]: ${getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || [])}
-    - [v_AI_Stock_Catalog]: ${stockCols}
-  `;
+## 9. INVENTORY TRACKING PROTOCOL
+- **KEY COLUMNS**:
+  - \`CurrentStockOnHand\`: Use this for the current physical stock in the factory.
+  - \`StockAtTimeOfSale\`: Use this for historical audits of stock levels on specific dates.
+  - \`MinimumStockLevel\`: The safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
+  - \`Quantity\`: The amount of stock currently moving (Sales velocity).
+- **ANALYSIS PATTERN**:
+  When asked "Is our stock matching our sales?":
+  1. Query \`SUM(Quantity)\` to see the movement velocity.
+  2. Query \`MAX(CurrentStockOnHand)\` to see the current availability.
+  3. Compare the two to determine "Weeks of Cover."
+
+## OUTPUT FORMAT (TUNE)
+Strictly follow this format (no markdown backticks):
+>>>SQL
+SELECT ...
+>>>EXP
+Explanation...
+>>>STRAT
+Strategic Analysis (Explain the trend and why the recommendation differs from a simple average)...
+>>>VIZ
+bar|line|pie|area
+>>>X
+ColumnNameForX
+>>>Y
+ColumnNameForY
+>>>SUM
+Brief Summary...
+>>>TRD
+- Trend 1
+- Trend 2
+>>>RSK
+- Risk 1
+>>>STR
+- Suggestion 1
+
+# VIEW SCHEMAS
+- [v_AI_Forecasting_Feed]: ${getCols("v_AI_Forecasting_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
+- [v_AI_Time_Series_Feed]: ${getCols("v_AI_Time_Series_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
+- [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
+- [v_AI_Omnibus_Master_Truth]: ${getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || [])}
+- [v_AI_Stock_Catalog]: ${stockCols}
+- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
+`;
 };
 
 const parseTuneResponse = (rawText: string) => {
