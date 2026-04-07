@@ -20,8 +20,8 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "EndOfDayStockOnHand", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
-  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName", "LastStockUpdateDate"]);
 
   const currentDate = new Date(now);
   const currentMonth = currentDate.getMonth() + 1;
@@ -29,48 +29,31 @@ const getSystemInstruction = (now: string) => {
   const currentFiscalYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
   return `
-# O'GRADY PAINTS ARCHITECTURAL ROUTING
+# O'GRADY PAINTS SEMANTIC ROUTING (VERSION 4.0)
 
-## 1. SALES & PROFIT ENGINE: [v_AI_Sales_Performance]
-- **TRIGGER**: Use this for "How much did we sell," "What is our profit," "Rep rankings," or "Historical invoices."
-- **KEY COLUMNS**: \`Revenue\`, \`Quantity\`, \`GrossProfit\`, \`BranchName\`, \`ProductName\`.
-- **Note**: This view has **ZERO** information about current stock levels.
+## 1. TRANSACTIONAL ANALYSIS: [v_AI_Omnibus_Master_Truth]
+- **PURPOSE**: Use for Revenue, Profit, Sales Rep Performance, and Qty SOLD.
+- **RULE**: If the user asks "How much did we SELL," use this view.
+- **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY & STOCK ENGINE: [v_AI_Inventory_Truth]
-- **TRIGGER**: Use this for "What is our stock on hand," "Check inventory," or "Find discrepancies."
-- **KEY COLUMNS**: 
-    - \`Warehouse_Stock_Count\`: The physical count in the warehouse master.
-    - \`Ledger_Stock_Count\`: The theoretical count based on the last transaction.
-    - \`Stock_Drift_Discrepancy\`: Use this to answer "Is our stock correct?"
+## 2. INVENTORY AUDITS: [v_AI_Inventory_History_Truth]
+- **PURPOSE**: Use for Stock Levels, Inventory Snapshots, and Historical Balances.
+- **RULE**: If the prompt asks for stock "on a date," "in a year," or "on hand," you MUST use this view.
+- **LOGIC**: To find stock for a period (e.g. Fiscal Year 2025), find the \`MAX(TranDate)\` for that period to get the most recent balance.
 
-## 3. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the v_AI_Omnibus_Master_Truth view. 
+## 3. EXAMPLE FOR FISCAL YEAR STOCK:
+Prompt: "How much stock was on hand in FY 2025?"
+SQL: 
+SELECT TOP 1 ProductName, EndOfDayStockOnHand
+FROM v_AI_Inventory_History_Truth
+WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
+ORDER BY TranDate DESC;
+
+## 4. RULES FOR THE AI AGENT:
+- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
 - **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons to prevent data type conversion errors (e.g., \`CAST(SalesRep AS VARCHAR) = '...' \`).
-
-## 4. INVENTORY AUDIT PROTOCOL
-
-### 1. HISTORICAL STOCK (ON A SPECIFIC DATE)
-If the user asks "How much stock was there on [DATE]":
-- **VIEW**: Use \`v_AI_Omnibus_Master_Truth\`.
-- **LOGIC**: You must find the most recent transaction for that product on or before that date.
-- **SQL**: 
-  \`\`\`sql
-  SELECT TOP 1 ProductName, Stock_OnHand_Ledger_Snapshot 
-  FROM v_AI_Omnibus_Master_Truth 
-  WHERE ProductName LIKE '%...%' AND TranDate <= 'YYYY-MM-DD' 
-  ORDER BY TranDate DESC
-  \`\`\`
-
-### 2. CURRENT STOCK (WAREHOUSE VS LEDGER)
-If the user asks for "Current stock" or "Inventory check":
-- **VIEW**: Use \`v_AI_Inventory_Truth\`.
-- **COLUMNS**: Use \`Warehouse_Stock_Count\` (Physical) and \`Ledger_Stock_Count\` (System).
-- **MATH**: Use \`MAX()\` or \`TOP 1\` per product. NEVER use \`SUM()\` for stock counts unless the user asks for a "Total across all products."
-
-### 3. TYPE SAFETY
-- **CRITICAL**: The database uses Alphanumeric IDs. Always use \`LIKE\` or wrap IDs in single quotes.
 
 ## 5. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
@@ -157,13 +140,14 @@ Brief Summary...
 - Suggestion 1
 
 # VIEW SCHEMAS
+- [v_AI_Inventory_History_Truth]: ${inventoryHistoryCols}
 - [v_AI_Sales_Performance]: ${salesPerformanceCols}
-- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
 - [v_AI_Forecasting_Feed]: ${getCols("v_AI_Forecasting_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Time_Series_Feed]: ${getCols("v_AI_Time_Series_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
 - [v_AI_Omnibus_Master_Truth]: ${masterCols}
 - [v_AI_Stock_Catalog]: ${getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || [])}
+- [v_AI_Inventory_Truth]: ${getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName", "LastStockUpdateDate"])}
 `;
 };
 
@@ -312,6 +296,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
+      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
