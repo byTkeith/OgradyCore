@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,20 +36,27 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY AUDIT PROTOCOL (THE "NO-ZERO" PROTOCOL)
-- **PRIMARY VIEW**: [v_AI_Inventory_History_Truth]
-- **PURPOSE**: Use for ALL questions regarding "Stock on hand," "Inventory levels," or "Warehouse counts."
+## 2. INVENTORY INTEGRITY RULES (THE "NO-ZERO" PROTOCOL)
+
+### SOURCE: [v_AI_Inventory_History_Truth]
+- Use this view to show ALL products for "Stock on hand," "Inventory levels," or "Warehouse counts."
+- If a product has no matching history, \`LastKnownLedgerSOH\` will be 0, but the row will still show the \`CurrentWarehouseSOH\`.
+
+### METRICS:
+- \`CurrentWarehouseSOH\`: The definitive factory count.
+- \`LastKnownLedgerSOH\`: The audit-trail count.
+- \`Stock_Drift_Value\`: The difference between the two.
+- \`TranDate\`: Use this to show the CEO when the stock level was last updated.
+
+### FILTERING:
+- To see all products in a specific year, use \`WHERE FiscalYear = 2025\`.
+- **CRITICAL**: Do NOT attempt to join this view to any other table. It is a pre-calculated, self-healing snapshot.
 - **THE "NO-ZERO" FILTERING RULE**:
     - **FORBIDDEN**: Never use \`WHERE TranDate = (SELECT MAX(TranDate)...)\`. This causes 0 results due to date mismatches.
     - **MANDATORY**: To get the most recent stock for a product, simply query the view directly. Every row in this view already represents the **Latest Known State** of that product.
-    - **MANDATORY**: To get stock for a specific year, use \`WHERE FiscalYear = 2025\`.
-- **COLUMN DEFINITIONS**:
-    - \`CurrentWarehouseSOH\`: Use this for "How much is in the factory NOW."
-    - \`LastKnownLedgerSOH\`: Use this for "What does the system ledger say."
-    - \`TranDate\`: Use this to show the CEO when the stock level was last updated.
 
 ## 3. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the v_AI_Omnibus_Master_Truth view. 
+- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
 - **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons to prevent data type conversion errors (e.g., \`CAST(SalesRep AS VARCHAR) = '...' \`).
@@ -303,6 +310,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
+      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
