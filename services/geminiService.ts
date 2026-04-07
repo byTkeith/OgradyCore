@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "EndOfDayStockOnHand", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -29,31 +29,38 @@ const getSystemInstruction = (now: string) => {
   const currentFiscalYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
   return `
-# O'GRADY PAINTS SEMANTIC ROUTING (VERSION 4.0)
+# O'GRADY PAINTS SEMANTIC ROUTING (VERSION 5.0)
 
 ## 1. TRANSACTIONAL ANALYSIS: [v_AI_Omnibus_Master_Truth]
 - **PURPOSE**: Use for Revenue, Profit, Sales Rep Performance, and Qty SOLD.
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY AUDITS: [v_AI_Inventory_History_Truth]
-- **PURPOSE**: Use for Stock Levels, Inventory Snapshots, and Historical Balances.
-- **RULE**: If the prompt asks for stock "on a date," "in a year," or "on hand," you MUST use this view.
-- **LOGIC**: To find stock for a period (e.g. Fiscal Year 2025), find the \`MAX(TranDate)\` for that period to get the most recent balance.
+## 2. INVENTORY AUDIT PROTOCOL (THE "NO-ZERO" PROTOCOL)
+- **PRIMARY VIEW**: [v_AI_Inventory_History_Truth]
+- **PURPOSE**: Use for ALL questions regarding "Stock on hand," "Inventory levels," or "Warehouse counts."
+- **THE "NO-ZERO" FILTERING RULE**:
+    - **FORBIDDEN**: Never use \`WHERE TranDate = (SELECT MAX(TranDate)...)\`. This causes 0 results due to date mismatches.
+    - **MANDATORY**: To get the most recent stock for a product, simply query the view directly. Every row in this view already represents the **Latest Known State** of that product.
+    - **MANDATORY**: To get stock for a specific year, use \`WHERE FiscalYear = 2025\`.
+- **COLUMN DEFINITIONS**:
+    - \`CurrentWarehouseSOH\`: Use this for "How much is in the factory NOW."
+    - \`LastKnownLedgerSOH\`: Use this for "What does the system ledger say."
+    - \`TranDate\`: Use this to show the CEO when the stock level was last updated.
 
-## 3. EXAMPLE FOR FISCAL YEAR STOCK:
-Prompt: "How much stock was on hand in FY 2025?"
-SQL: 
-SELECT TOP 1 ProductName, EndOfDayStockOnHand
-FROM v_AI_Inventory_History_Truth
-WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
-ORDER BY TranDate DESC;
-
-## 4. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
+## 3. RULES FOR THE AI AGENT:
+- **NO CROSS-OVER**: Never try to find stock in the v_AI_Omnibus_Master_Truth view. 
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
 - **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons to prevent data type conversion errors (e.g., \`CAST(SalesRep AS VARCHAR) = '...' \`).
+
+## 4. EXAMPLE FOR FISCAL YEAR STOCK:
+Prompt: "How much stock was on hand in FY 2025?"
+SQL: 
+SELECT TOP 1 ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
+FROM v_AI_Inventory_History_Truth
+WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
+ORDER BY TranDate DESC;
 
 ## 5. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
@@ -296,7 +303,6 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
       
       ## REQUIREMENTS:
-      - Use ZAR (R) for all currency references.
       - Provide deep strategic analysis, not just data summaries.
       - Compare trends and identify key performance indicators (KPIs).
       - Include market context (e.g., inflation, seasonal shifts in South Africa).
