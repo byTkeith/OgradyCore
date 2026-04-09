@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
+  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["StockCode", "ProductName", "Warehouse_Master_SOH", "Audit_Ledger_SOH", "Stock_Discrepancy"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,29 +36,21 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY INTEGRITY PROTOCOL (VERSION 6.0)
+## 2. INVENTORY INTEGRITY PROTOCOL (FINAL)
 
-### SOURCE: [v_AI_Inventory_History_Truth]
-- Use this view to show ALL products for "Stock on hand," "Inventory levels," or "Warehouse counts."
-- If a product has no matching history, \`LastKnownLedgerSOH\` will be 0, but the row will still show the \`CurrentWarehouseSOH\`.
+### VIEW: [v_AI_Inventory_Truth]
+- Use this view for all "Stock" or "Inventory" questions.
+- It provides a side-by-side comparison of the Warehouse and the Ledger.
 
-### THE NAME-ANCHOR RULE:
-- This database has "Identity Drift" in numeric codes.
-- **MANDATORY**: Always filter and group by \`ProductName\`. 
-- **FORBIDDEN**: Do not use \`StockCode\` or \`PLUCode\` for joining or identifying items in inventory reports.
+### COLUMN LOGIC:
+1. \`Warehouse_Master_SOH\`: Use this to answer "What is physically in the warehouse?"
+2. \`Audit_Ledger_SOH\`: Use this to answer "What does our sales history say we have?"
+3. \`Stock_Discrepancy\`: Use this to identify missing or un-scanned items.
 
-### METRICS FOR THE CEO:
-- \`CurrentWarehouseSOH\`: The physical count in the factory master.
-- \`LastKnownLedgerSOH\`: The count according to the transaction ledger.
-- If these numbers differ, report the \`Stock_Drift_Value\` as a data integrity warning.
-
-### DRILL-DOWN:
-- Every row in this view is already the "Latest State." 
-- To see the stock on hand at the end of a period, filter by \`FiscalYear\` and look at the row for that product.
-- **CRITICAL**: Do NOT attempt to join this view to any other table. It is a pre-calculated, self-healing snapshot.
-- **THE "NO-ZERO" FILTERING RULE**:
-    - **FORBIDDEN**: Never use \`WHERE TranDate = (SELECT MAX(TranDate)...)\`. This causes 0 results due to date mismatches.
-    - **MANDATORY**: To get the most recent stock for a product, simply query the view directly. Every row in this view already represents the **Latest Known State** of that product.
+### RULES FOR ANALYSIS:
+- If a user asks "How much stock do we have?", report the \`Warehouse_Master_SOH\`.
+- If the \`Audit_Ledger_SOH\` is different, inform the user: "There is a discrepancy of [X] units between the master file and the transaction ledger."
+- Always group by \`StockCode\` and \`ProductName\` to ensure all 12 variants are shown.
 
 ## 3. RULES FOR THE AI AGENT:
 - **NO CROSS-OVER**: Never try to find stock in the Sales view. 
@@ -159,14 +151,13 @@ Brief Summary...
 - Suggestion 1
 
 # VIEW SCHEMAS
-- [v_AI_Inventory_History_Truth]: ${inventoryHistoryCols}
 - [v_AI_Sales_Performance]: ${salesPerformanceCols}
 - [v_AI_Forecasting_Feed]: ${getCols("v_AI_Forecasting_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Time_Series_Feed]: ${getCols("v_AI_Time_Series_Feed", ["SiteID", "BranchName", "PLUCode", "ProductName", "PackSize", "TimeKey", "FiscalYear", "MonthlyNetQty", "MonthlyNetRevenue"])}
 - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
 - [v_AI_Omnibus_Master_Truth]: ${masterCols}
 - [v_AI_Stock_Catalog]: ${getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || [])}
-- [v_AI_Inventory_Truth]: ${getCols("v_AI_Inventory_Truth", ["Warehouse_Stock_Count", "Ledger_Stock_Count", "Stock_Drift_Discrepancy", "BranchName", "ProductName", "LastStockUpdateDate"])}
+- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
 `;
 };
 
