@@ -208,15 +208,40 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelName = "gemini-3-flash-preview";
+  
+  // Define a list of models to try in order of preference.
+  // gemini-3.1-pro-preview is the latest highly sophisticated model for deep analysis.
+  // gemini-3-flash-preview is the fast, reliable fallback.
+  const fallbackModels = [
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview"
+  ];
+  
+  const generateContentWithFallback = async (requestConfig: any) => {
+    let lastError: any;
+    for (const model of fallbackModels) {
+      try {
+        const response = await ai.models.generateContent({
+          ...requestConfig,
+          model: model
+        });
+        return { response, usedModel: model };
+      } catch (error: any) {
+        console.warn(`Model ${model} failed:`, error.message);
+        lastError = error;
+        // Continue to the next model in the fallback list
+      }
+    }
+    throw lastError || new Error("All fallback models failed.");
+  };
+
   const now = new Date().toISOString().split('T')[0];
 
   try {
     // 0. Pre-check for Statistical Forecast
     if (prompt.toLowerCase().includes("forecast") || prompt.toLowerCase().includes("predict")) {
       // Use Gemini to extract the product name
-      const extractRes = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+      const { response: extractRes } = await generateContentWithFallback({
         contents: `Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`,
       });
       const productName = extractRes.text?.trim() || "NONE";
@@ -260,8 +285,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     }
 
     // 1. Generate SQL with Gemini
-    const response = await ai.models.generateContent({
-      model: modelName,
+    const { response, usedModel: sqlModel } = await generateContentWithFallback({
       contents: prompt,
       config: {
         systemInstruction: getSystemInstruction(now),
@@ -332,8 +356,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       - Immediate strategic move 1 (Actionable).
       - Long-term growth strategy based on the data.`;
 
-    const insightResponse = await ai.models.generateContent({
-      model: modelName,
+    const { response: insightResponse, usedModel: insightModel } = await generateContentWithFallback({
       contents: insightPrompt,
       config: {
         systemInstruction: insightSys,
@@ -358,7 +381,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       strategicAnalysis: plan.strategicAnalysis,
       data,
       insight,
-      engine: statisticalForecasts ? `Holt-Winters + Gemini Paid (${modelName})` : `Gemini Paid (${modelName})`
+      engine: statisticalForecasts ? `Holt-Winters + Gemini Paid (${insightModel})` : `Gemini Paid (${sqlModel})`
     };
 
   } catch (error: any) {
