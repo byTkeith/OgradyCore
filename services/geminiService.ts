@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["StockCode", "ProductName", "Warehouse_Master_SOH", "Audit_Ledger_SOH", "Stock_Drift_Discrepancy", "Link_Method_Status"]);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,20 +36,20 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY RECONCILIATION PROTOCOL
+## 2. INVENTORY INTEGRITY RULES
 
-### VIEW: [v_AI_Inventory_Truth]
+### SOURCE: [v_AI_Inventory_History_Truth]
+- Use this view to show ALL products. 
+- If a product has no matching history, \`LastKnownLedgerSOH\` will be 0, but the row will still show the \`CurrentWarehouseSOH\`.
 
-### THE HIERARCHY OF TRUTH:
-1. **Warehouse_Master_SOH**: This is the current physical truth of the factory.
-2. **Audit_Ledger_SOH**: This is the historical truth of our sales transactions.
-3. **Link_Method_Status**: Shows if the item was found via Barcode or Name.
+### METRICS:
+- \`CurrentWarehouseSOH\`: The definitive factory count.
+- \`LastKnownLedgerSOH\`: The audit-trail count.
+- \`Stock_Drift_Value\`: The difference between the two.
 
-### ANALYSIS RULES:
-- If asked "What is our stock?", report the \`Warehouse_Master_SOH\`.
-- If asked "Is our data accurate?", compare \`Warehouse_Master_SOH\` against \`Audit_Ledger_SOH\`. 
-- Highlight any row where \`Stock_Drift_Discrepancy\` is not zero. This represents the "Loophole" where units have gone missing or were not rung up correctly.
-- Always group by \`StockCode\` and \`ProductName\` to ensure all 12 variants are shown.
+### FILTERING:
+- To see all products in a specific year, use \`WHERE FiscalYear = 2025\`.
+- **CRITICAL**: Do NOT attempt to join this view to any other table. It is a pre-calculated, self-healing snapshot.
 
 ## 3. RULES FOR THE AI AGENT:
 - **NO CROSS-OVER**: Never try to find stock in the Sales view. 
@@ -156,7 +156,7 @@ Brief Summary...
 - [v_AI_Omnibus_Forecast_Master]: ${getCols("v_AI_Omnibus_Forecast_Master", SCHEMA_MAP["dbo.v_AI_Omnibus_Forecast_Master"]?.fields || [])}
 - [v_AI_Omnibus_Master_Truth]: ${masterCols}
 - [v_AI_Stock_Catalog]: ${getCols("v_AI_Stock_Catalog", SCHEMA_MAP["dbo.v_AI_Stock_Catalog"]?.fields || [])}
-- [v_AI_Inventory_Truth]: ${inventoryTruthCols}
+- [v_AI_Inventory_History_Truth]: ${inventoryHistoryCols}
 `;
 };
 
