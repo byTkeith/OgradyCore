@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["StockCode", "ProductName", "Warehouse_Master_SOH", "Audit_Ledger_SOH", "Stock_Discrepancy"]);
+  const inventoryTruthCols = getCols("v_AI_Inventory_Truth", ["StockCode", "ProductName", "Warehouse_Master_SOH", "Audit_Ledger_SOH", "Stock_Drift_Discrepancy", "Link_Method_Status"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,20 +36,19 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY INTEGRITY PROTOCOL (FINAL)
+## 2. INVENTORY RECONCILIATION PROTOCOL
 
 ### VIEW: [v_AI_Inventory_Truth]
-- Use this view for all "Stock" or "Inventory" questions.
-- It provides a side-by-side comparison of the Warehouse and the Ledger.
 
-### COLUMN LOGIC:
-1. \`Warehouse_Master_SOH\`: Use this to answer "What is physically in the warehouse?"
-2. \`Audit_Ledger_SOH\`: Use this to answer "What does our sales history say we have?"
-3. \`Stock_Discrepancy\`: Use this to identify missing or un-scanned items.
+### THE HIERARCHY OF TRUTH:
+1. **Warehouse_Master_SOH**: This is the current physical truth of the factory.
+2. **Audit_Ledger_SOH**: This is the historical truth of our sales transactions.
+3. **Link_Method_Status**: Shows if the item was found via Barcode or Name.
 
-### RULES FOR ANALYSIS:
-- If a user asks "How much stock do we have?", report the \`Warehouse_Master_SOH\`.
-- If the \`Audit_Ledger_SOH\` is different, inform the user: "There is a discrepancy of [X] units between the master file and the transaction ledger."
+### ANALYSIS RULES:
+- If asked "What is our stock?", report the \`Warehouse_Master_SOH\`.
+- If asked "Is our data accurate?", compare \`Warehouse_Master_SOH\` against \`Audit_Ledger_SOH\`. 
+- Highlight any row where \`Stock_Drift_Discrepancy\` is not zero. This represents the "Loophole" where units have gone missing or were not rung up correctly.
 - Always group by \`StockCode\` and \`ProductName\` to ensure all 12 variants are shown.
 
 ## 3. RULES FOR THE AI AGENT:
