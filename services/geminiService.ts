@@ -217,7 +217,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelName = "gemini-3-flash-preview";
+  const modelName = "gemini-1.5-pro";
   const now = new Date().toISOString().split('T')[0];
 
   try {
@@ -225,7 +225,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     if (prompt.toLowerCase().includes("forecast") || prompt.toLowerCase().includes("predict")) {
       // Use Gemini to extract the product name
       const extractRes = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-1.5-pro",
         contents: `Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`,
       });
       const productName = extractRes.text?.trim() || "NONE";
