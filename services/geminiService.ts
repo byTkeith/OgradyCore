@@ -36,20 +36,25 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY INTEGRITY RULES (THE "NO-ZERO" PROTOCOL)
+## 2. INVENTORY INTEGRITY PROTOCOL (VERSION 6.0)
 
 ### SOURCE: [v_AI_Inventory_History_Truth]
 - Use this view to show ALL products for "Stock on hand," "Inventory levels," or "Warehouse counts."
 - If a product has no matching history, \`LastKnownLedgerSOH\` will be 0, but the row will still show the \`CurrentWarehouseSOH\`.
 
-### METRICS:
-- \`CurrentWarehouseSOH\`: The definitive factory count.
-- \`LastKnownLedgerSOH\`: The audit-trail count.
-- \`Stock_Drift_Value\`: The difference between the two.
-- \`TranDate\`: Use this to show the CEO when the stock level was last updated.
+### THE NAME-ANCHOR RULE:
+- This database has "Identity Drift" in numeric codes.
+- **MANDATORY**: Always filter and group by \`ProductName\`. 
+- **FORBIDDEN**: Do not use \`StockCode\` or \`PLUCode\` for joining or identifying items in inventory reports.
 
-### FILTERING:
-- To see all products in a specific year, use \`WHERE FiscalYear = 2025\`.
+### METRICS FOR THE CEO:
+- \`CurrentWarehouseSOH\`: The physical count in the factory master.
+- \`LastKnownLedgerSOH\`: The count according to the transaction ledger.
+- If these numbers differ, report the \`Stock_Drift_Value\` as a data integrity warning.
+
+### DRILL-DOWN:
+- Every row in this view is already the "Latest State." 
+- To see the stock on hand at the end of a period, filter by \`FiscalYear\` and look at the row for that product.
 - **CRITICAL**: Do NOT attempt to join this view to any other table. It is a pre-calculated, self-healing snapshot.
 - **THE "NO-ZERO" FILTERING RULE**:
     - **FORBIDDEN**: Never use \`WHERE TranDate = (SELECT MAX(TranDate)...)\`. This causes 0 results due to date mismatches.
