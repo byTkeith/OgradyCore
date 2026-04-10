@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID"]);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID", "Data_Integrity_Status"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,20 +36,20 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY INTEGRITY RULES
+## 2. INVENTORY AUDIT PROTOCOL (VERSION 8.0)
 
 ### SOURCE: [v_AI_Inventory_History_Truth]
-- Use this view to show ALL products. 
-- If a product has no matching history, \`LastKnownLedgerSOH\` will be 0, but the row will still show the \`CurrentWarehouseSOH\`.
+- **TRUTH RULE**: The \`ProductName\` in this view comes from the Transaction Ledger (\`AUDIT\`). 
+- **STALE DATA WARNING**: The \`CurrentWarehouseSOH\` comes from the master file. If it differs from \`LastKnownLedgerSOH\`, it suggests a manual stock adjustment or a recycled barcode.
 
-### METRICS:
-- \`CurrentWarehouseSOH\`: The definitive factory count.
-- \`LastKnownLedgerSOH\`: The audit-trail count.
-- \`Stock_Drift_Value\`: The difference between the two.
+### KEY COLUMNS:
+- \`LastKnownLedgerSOH\`: Use this to answer "What does the ledger say we have?"
+- \`CurrentWarehouseSOH\`: Use this to answer "What does the factory master say we have?"
+- \`Data_Integrity_Status\`: Always check this. If it says "STALE STOCK MASTER," warn the user that the warehouse name for this code has been changed.
 
 ### FILTERING:
-- To see all products in a specific year, use \`WHERE FiscalYear = 2025\`.
-- **CRITICAL**: Do NOT attempt to join this view to any other table. It is a pre-calculated, self-healing snapshot.
+- To see the state of products in a specific year, use \`WHERE FiscalYear = 2025\`.
+- **NO JOINING**: Do not join this view. It is the final reconciled snapshot.
 
 ## 3. RULES FOR THE AI AGENT:
 - **NO CROSS-OVER**: Never try to find stock in the Sales view. 
@@ -60,7 +60,7 @@ const getSystemInstruction = (now: string) => {
 ## 4. EXAMPLE FOR FISCAL YEAR STOCK:
 Prompt: "How much stock was on hand in FY 2025?"
 SQL: 
-SELECT ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
+SELECT TOP 1 ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
 FROM v_AI_Inventory_History_Truth
 WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
 ORDER BY TranDate DESC;
