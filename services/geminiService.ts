@@ -20,7 +20,7 @@ const getSystemInstruction = (now: string) => {
   };
 
   const masterCols = getCols("v_AI_Omnibus_Master_Truth", SCHEMA_MAP["dbo.v_AI_Omnibus_Master_Truth"]?.fields || []);
-  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID", "Data_Integrity_Status"]);
+  const inventoryHistoryCols = getCols("v_AI_Inventory_History_Truth", ["ProductName", "CurrentWarehouseSOH", "LastKnownLedgerSOH", "Stock_Drift_Value", "TranDate", "FiscalYear", "BranchName", "SiteID", "Data_Integrity_Status", "Inventory_Worth_ExclVAT", "Stock_Alert_Status"]);
   const salesPerformanceCols = getCols("v_AI_Sales_Performance", ["Revenue", "Quantity", "GrossProfit", "BranchName", "ProductName"]);
 
   const currentDate = new Date(now);
@@ -36,20 +36,21 @@ const getSystemInstruction = (now: string) => {
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
 
-## 2. INVENTORY AUDIT PROTOCOL (VERSION 8.0)
+## 2. INVENTORY VALUATION & AUDIT PROTOCOL
 
-### SOURCE: [v_AI_Inventory_History_Truth]
-- **TRUTH RULE**: The \`ProductName\` in this view comes from the Transaction Ledger (\`AUDIT\`). 
-- **STALE DATA WARNING**: The \`CurrentWarehouseSOH\` comes from the master file. If it differs from \`LastKnownLedgerSOH\`, it suggests a manual stock adjustment or a recycled barcode.
+### VIEW: [v_AI_Inventory_History_Truth]
 
-### KEY COLUMNS:
-- \`LastKnownLedgerSOH\`: Use this to answer "What does the ledger say we have?"
-- \`CurrentWarehouseSOH\`: Use this to answer "What does the factory master say we have?"
-- \`Data_Integrity_Status\`: Always check this. If it says "STALE STOCK MASTER," warn the user that the warehouse name for this code has been changed.
+### CORE METRICS:
+- \`CurrentWarehouseSOH\`: Use for physical warehouse counts.
+- \`Inventory_Worth_ExclVAT\`: Use to report the total financial value of stock on hand.
+- \`Stock_Drift_Value\`: Use to identify discrepancies between the warehouse and the ledger.
 
-### FILTERING:
-- To see the state of products in a specific year, use \`WHERE FiscalYear = 2025\`.
-- **NO JOINING**: Do not join this view. It is the final reconciled snapshot.
+### REORDER LOGIC:
+- If \`Stock_Alert_Status\` is 'REORDER', highlight this product as a supply chain risk.
+
+### RULES:
+- **FORBIDDEN**: Never use \`SUM()\` for stock counts unless summarizing a whole group. 
+- Use \`MAX(CurrentWarehouseSOH)\` when grouping by product to avoid double-counting.
 
 ## 3. RULES FOR THE AI AGENT:
 - **NO CROSS-OVER**: Never try to find stock in the Sales view. 
