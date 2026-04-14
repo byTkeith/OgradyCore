@@ -25,11 +25,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const response = await fetch(`${bridgeUrl}/api/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sql })
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'  // prevents ngrok HTML interception
+      },
+      body: JSON.stringify({ sql }),
+      signal: AbortSignal.timeout(55000) // 55s — just under Vercel's 60s limit
     })
 
-    const data = await response.json()
+    const text = await response.text() // read as text first to avoid JSON parse crash
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      console.error('Non-JSON response from bridge:', text)
+      return res.status(502).json({ error: 'Bridge returned invalid JSON', raw: text })
+    }
 
     if (!response.ok) {
       return res.status(response.status).json({ error: data })
