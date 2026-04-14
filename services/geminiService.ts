@@ -35,6 +35,7 @@ const getSystemInstruction = (now: string) => {
 - **PURPOSE**: Use for Revenue, Profit, Sales Rep Performance, and Qty SOLD.
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
+- **DATE FILTERING**: Use \`TranDate\` or \`TransactionDate\` for date filtering. NEVER use \`Date\`.
 
 ## 2. INVENTORY VALUATION & AUDIT PROTOCOL
 
