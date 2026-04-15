@@ -4,11 +4,28 @@ import { QueryResult, AnalystInsight } from "../types";
 
 let schemaCache: Record<string, string[]> = {};
 
+// ✅ Environment-aware API key resolution
+const getApiKey = (): string => {
+  if (typeof window === 'undefined') {
+    // Server-side (Node.js/Vercel)
+    return process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  }
+  // Client-side (Browser)
+  return (import.meta as any).env?.VITE_GEMINI_API_KEY
+    || (import.meta as any).env?.VITE_API_KEY
+    || process.env.GEMINI_API_KEY
+    || process.env.API_KEY
+    || '';
+};
+
+// ✅ Environment-aware settings
 const getSettings = () => {
   let storedUrl = null;
-  if (typeof window !== 'undefined') {
+
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
     storedUrl = localStorage.getItem('og_bridge_url');
   }
+
   let baseUrl = storedUrl || process.env.BRIDGE_URL || DEFAULT_BRIDGE_URL;
   return { bridgeUrl: baseUrl.replace(/\/$/, "") };
 };
@@ -53,35 +70,34 @@ const getSystemInstruction = (now: string) => {
 - If \`Stock_Alert_Status\` is 'REORDER', highlight this product as a supply chain risk.
 
 ### RULES:
-- **FORBIDDEN**: Never use \`SUM()\` for stock counts unless summarizing a whole group. 
+- **FORBIDDEN**: Never use \`SUM()\` for stock counts unless summarizing a whole group.
 - Use \`MAX(CurrentWarehouseSOH)\` when grouping by product to avoid double-counting.
 
 ## 3. RULES FOR THE AI AGENT:
-- **NO CROSS-OVER**: Never try to find stock in the Sales view. 
+- **NO CROSS-OVER**: Never try to find stock in the Sales view.
 - **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
 - **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
-- **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons to prevent data type conversion errors (e.g., \`CAST(SalesRep AS VARCHAR) = '...' \`).
+- **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons.
 
 ## 4. EXAMPLE FOR FISCAL YEAR STOCK:
 Prompt: "How much stock was on hand in FY 2025?"
-SQL: 
+SQL:
 SELECT TOP 1 ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
 FROM v_AI_Inventory_History_Truth
 WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
 ORDER BY TranDate DESC;
 
 ## 5. THE BUNDLING RULE (NO DUPLICATION)
-- **CRITICAL**: When asked for a list of "Top Products" or "Trends," you must aggregate the data so each Product appears on **ONLY ONE ROW**.
-- **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in the \`SELECT\` or \`GROUP BY\` clauses unless the user specifically asked for a "Monthly Breakdown", a "Graph", or a "Forecast".
-- **RESULT**: If the user asks for "Top 30 products over 2 years," your SQL must group ONLY by \`ProductName\`.
+- **CRITICAL**: When asked for a list of "Top Products" or "Trends," aggregate so each Product appears on **ONLY ONE ROW**.
+- **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in \`SELECT\` or \`GROUP BY\` unless the user asks for "Monthly Breakdown", "Graph", or "Forecast".
 
-## 5. FORECASTING PROTOCOL (THE STATS PIPELINE)
+## 6. FORECASTING PROTOCOL (THE STATS PIPELINE)
 - When a prompt contains "Forecast":
   1. Generate SQL from \`v_AI_Forecasting_Feed\` for the requested time period.
-  2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in the \`SELECT\` and \`GROUP BY\` for Forecasts. The Python Statistical Model requires chronological data to calculate the \`SuggestedWeeklyStock\`. (The Python backend will bundle the final output for you).
-  3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Do not do math in SQL. Just fetch the raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
+  2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in \`SELECT\` and \`GROUP BY\` for Forecasts.
+  3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Just fetch raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
   4. Hand this data to the **Statistical Model** by simply outputting the SQL.
-  
+
   *Example: Forecast top 30 products by revenue over 2 years.*
   WITH TopProducts AS (
       SELECT TOP 30 ProductName
@@ -90,54 +106,46 @@ ORDER BY TranDate DESC;
       GROUP BY ProductName
       ORDER BY SUM(MonthlyNetRevenue) DESC
   )
-  SELECT 
-      t.TimeKey, 
+  SELECT
+      t.TimeKey,
       t.ProductName,
-      SUM(t.MonthlyNetQty) AS Qty, 
+      SUM(t.MonthlyNetQty) AS Qty,
       SUM(t.MonthlyNetRevenue) AS Revenue
   FROM v_AI_Forecasting_Feed t
   INNER JOIN TopProducts tp ON t.ProductName = tp.ProductName
   WHERE t.FiscalYear >= ${currentFiscalYear - 2}
   GROUP BY t.TimeKey, t.ProductName
   ORDER BY t.ProductName, t.TimeKey ASC;
-  
-  5. The model returns the \`SuggestedWeeklyStock\`.
-  6. Display the result: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
 
-## 6. SEMANTIC MAPPING (SYNONYMS)
+  5. The model returns the \`SuggestedWeeklyStock\`.
+  6. Display: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
+
+## 7. SEMANTIC MAPPING (SYNONYMS)
 - Always use \`LIKE '%...%'\` for \`ProductName\` and \`BranchName\`.
 - \`BranchName\` and \`CustomerName\` are identical.
 - \`MonthlyRevenue\`, \`Revenue\`, and \`NetRevenue\` are identical.
-- **Pack Sizes**: Ignore the \`PackSize\` (Description2) unless the user specifically asks for "5L" or "20L". Do not group by it by default.
+- **Pack Sizes**: Ignore \`PackSize\` unless user specifically asks for "5L" or "20L".
 
-## 7. THE FISCAL MANDATE
+## 8. THE FISCAL MANDATE
 - The business runs on a **March 1st - February 28th** Fiscal Year.
 - The current Fiscal Year is **${currentFiscalYear}**.
-- When the user asks for "trends over the last two years," you must query:
+- When the user asks for "trends over the last two years":
   \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
-
-## 8. EXCLUSIONS
 
 ## 9. INVENTORY TRACKING PROTOCOL
 - **KEY COLUMNS**:
-  - \`CurrentStockOnHand\`: Use this for the current physical stock in the factory.
-  - \`StockAtTimeOfSale\`: Use this for historical audits of stock levels on specific dates.
-  - \`MinimumStockLevel\`: The safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
-  - \`Quantity\`: The amount of stock currently moving (Sales velocity).
-- **ANALYSIS PATTERN**:
-  When asked "Is our stock matching our sales?":
-  1. Query \`SUM(Quantity)\` to see the movement velocity.
-  2. Query \`MAX(CurrentStockOnHand)\` to see the current availability.
-  3. Compare the two to determine "Weeks of Cover."
+  - \`CurrentStockOnHand\`: Current physical stock in the factory.
+  - \`StockAtTimeOfSale\`: Historical audits of stock levels on specific dates.
+  - \`MinimumStockLevel\`: Safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
+  - \`Quantity\`: Amount of stock currently moving (Sales velocity).
 
-## OUTPUT FORMAT (TUNE)
-Strictly follow this format (no markdown backticks):
+## OUTPUT FORMAT (TUNE) — strictly follow, no markdown backticks:
 >>>SQL
 SELECT ...
 >>>EXP
 Explanation...
 >>>STRAT
-Strategic Analysis (Explain the trend and why the recommendation differs from a simple average)...
+Strategic Analysis...
 >>>VIZ
 bar|line|pie|area
 >>>X
@@ -170,7 +178,7 @@ const parseTuneResponse = (rawText: string) => {
   const data: any = {};
   const pattern = />>>(SQL|EXP|STRAT|VIZ|X|Y|SUM|TRD|RSK|STR)\s*([\s\S]*?)(?=(?:>>>)|$)/g;
   let match;
-  
+
   const keyMap: Record<string, string> = {
     "SQL": "sql",
     "EXP": "explanation",
@@ -187,14 +195,14 @@ const parseTuneResponse = (rawText: string) => {
   while ((match = pattern.exec(rawText)) !== null) {
     const tag = match[1];
     let content = match[2].trim();
-    
+
     if (content.startsWith("```")) {
       content = content.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "");
     }
 
     if (keyMap[tag]) {
       if (["TRD", "RSK", "STR"].includes(tag)) {
-        data[keyMap[tag]] = content.split("\n").map(line => line.replace(/^- /, "").trim()).filter(line => line);
+        data[keyMap[tag]] = content.split("\n").map((line: string) => line.replace(/^- /, "").trim()).filter((line: string) => line);
       } else {
         data[keyMap[tag]] = content;
       }
@@ -203,37 +211,34 @@ const parseTuneResponse = (rawText: string) => {
   return Object.keys(data).length > 0 ? data : null;
 };
 
+// ✅ Works in both browser and Node.js
 export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engine: string, insight: AnalystInsight }> => {
   const { bridgeUrl } = getSettings();
-  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+  const apiKey = getApiKey();
 
   if (!apiKey || apiKey === "undefined" || apiKey === "") {
-    throw new Error("GEMINI_API_KEY is missing. If you are in AI Studio, please add it to the Secrets in the Settings menu. If you are on Vercel, ensure GEMINI_API_KEY is set in your project environment variables.");
+    throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  
-  // Define a list of models to try in order of preference.
-  // gemini-3.1-pro-preview is the latest highly sophisticated model for deep analysis.
-  // gemini-3-flash-preview is the fast, reliable fallback.
+
   const fallbackModels = [
-    "gemini-3.1-pro-preview",
-    "gemini-3-flash-preview"
+    "gemini-2.5-pro-preview-05-06",
+    "gemini-2.0-flash"
   ];
-  
+
   const generateContentWithFallback = async (requestConfig: any) => {
     let lastError: any;
     for (const model of fallbackModels) {
       try {
         const response = await ai.models.generateContent({
           ...requestConfig,
-          model: model
+          model
         });
         return { response, usedModel: model };
       } catch (error: any) {
         console.warn(`Model ${model} failed:`, error.message);
         lastError = error;
-        // Continue to the next model in the fallback list
       }
     }
     throw lastError || new Error("All fallback models failed.");
@@ -244,23 +249,22 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   try {
     // 0. Pre-check for Statistical Forecast
     if (prompt.toLowerCase().includes("forecast") || prompt.toLowerCase().includes("predict")) {
-      // Use Gemini to extract the product name
       const { response: extractRes } = await generateContentWithFallback({
         contents: `Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`,
       });
       const productName = extractRes.text?.trim() || "NONE";
-      
+
       if (productName !== "NONE") {
-        const forecastEndpoint = bridgeUrl ? `${bridgeUrl}/api/forecast` : '/api/forecast';
+        const forecastEndpoint = `${bridgeUrl}/api/forecast`;
         const forecastRes = await fetch(forecastEndpoint, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'ngrok-skip-browser-warning': 'true'
           },
           body: JSON.stringify({ product_name: productName, api_key: apiKey })
         });
-        
+
         if (forecastRes.ok) {
           const forecastData = await forecastRes.json();
           if (forecastData.status === "success") {
@@ -297,20 +301,24 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     });
 
     const aiRaw = response.text;
-    if (!aiRaw) {
-      throw new Error("AI failed to generate a valid response.");
-    }
+    if (!aiRaw) throw new Error("AI failed to generate a valid response.");
+
     const plan = parseTuneResponse(aiRaw);
+    if (!plan || !plan.sql) throw new Error("AI failed to generate a valid query.");
 
-    if (!plan || !plan.sql) {
-      throw new Error("AI failed to generate a valid query.");
+    // 2. Execute SQL — server-side calls bridge directly, client-side goes via core proxy
+    let executeEndpoint: string;
+    if (typeof window === 'undefined') {
+      // Server-side: call main.py bridge directly
+      executeEndpoint = `${bridgeUrl}/api/execute`;
+    } else {
+      // Client-side: call core Vercel proxy
+      executeEndpoint = bridgeUrl ? `${bridgeUrl}/api/execute` : '/api/execute';
     }
 
-    // 2. Execute SQL on Bridge
-    const executeEndpoint = bridgeUrl ? `${bridgeUrl}/api/execute` : '/api/execute';
     const executeRes = await fetch(executeEndpoint, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
       },
@@ -328,49 +336,43 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     // 3. Generate Insights with Gemini
     let insightPrompt = `Query: ${prompt}\nData Sample: ${JSON.stringify(data.slice(0, 20))}`;
     if (statisticalForecasts) {
-      insightPrompt += `\n\nNote: The data provided above is the output of the Holt-Winters Statistical Model. Use these exact numbers for your "SuggestedWeeklyStock" recommendations.`;
+      insightPrompt += `\n\nNote: The data above is the output of the Holt-Winters Statistical Model. Use these exact numbers for your "SuggestedWeeklyStock" recommendations.`;
     }
 
     const insightSys = `You are a world-class CEO and Strategic Consultant. Provide a high-level executive brief in TUNE format based on the data provided.
-      
-      ## REQUIREMENTS:
-      - Use ZAR (R) for all currency references.
-      - Provide deep strategic analysis, not just data summaries.
-      - Compare trends and identify key performance indicators (KPIs).
-      - Include market context (e.g., inflation, seasonal shifts in South Africa).
-      - **SUPPLY CHAIN HEALTH CHECK**:
-        - Inventory Coverage: \`CurrentStockOnHand / WeeklySalesVelocity\`.
-        - Stock-out Risk: If \`CurrentStockOnHand < MinimumStockLevel\`.
-        - Replenishment Accuracy: Compare \`StockAtTimeOfSale\` against \`Quantity\` sold to identify lost sales due to empty factory.
-      - Offer actionable, data-driven decisions for the executive board.
-      - **CRITICAL FORECASTING RULE**: If the data contains "Statistical Model Forecasts (Holt-Winters)", you MUST use these exact numbers for your "SuggestedWeeklyStock" recommendations. Do not calculate them yourself. Present the model's findings clearly.
 
-      >>>SUM
-      Executive Summary: A high-impact, one-sentence strategic overview.
-      >>>TRD
-      Trend Analysis & KPIs:
-      - Detailed trend 1 with KPI impact.
-      - Detailed trend 2 with year-over-year comparison.
-      >>>RSK
-      Risk Assessment:
-      - Critical risk 1 (e.g., supply chain, margin compression).
-      - Critical risk 2 (e.g., seasonal downturn).
-      >>>STR
-      Strategic Roadmap:
-      - Immediate strategic move 1 (Actionable).
-      - Long-term growth strategy based on the data.`;
+## REQUIREMENTS:
+- Use ZAR (R) for all currency references.
+- Provide deep strategic analysis, not just data summaries.
+- Compare trends and identify key KPIs.
+- Include market context (e.g., inflation, seasonal shifts in South Africa).
+- **SUPPLY CHAIN HEALTH CHECK**:
+  - Inventory Coverage: CurrentStockOnHand / WeeklySalesVelocity
+  - Stock-out Risk: If CurrentStockOnHand < MinimumStockLevel
+  - Replenishment Accuracy: Compare StockAtTimeOfSale against Quantity sold
+- Offer actionable, data-driven decisions for the executive board.
+- **CRITICAL FORECASTING RULE**: If data contains "Statistical Model Forecasts (Holt-Winters)", use these exact numbers for SuggestedWeeklyStock. Do not calculate yourself.
+
+>>>SUM
+Executive Summary: A high-impact, one-sentence strategic overview.
+>>>TRD
+- Detailed trend 1 with KPI impact.
+- Detailed trend 2 with year-over-year comparison.
+>>>RSK
+- Critical risk 1 (e.g., supply chain, margin compression).
+- Critical risk 2 (e.g., seasonal downturn).
+>>>STR
+- Immediate strategic move 1 (Actionable).
+- Long-term growth strategy based on the data.`;
 
     const { response: insightResponse, usedModel: insightModel } = await generateContentWithFallback({
       contents: insightPrompt,
-      config: {
-        systemInstruction: insightSys,
-      }
+      config: { systemInstruction: insightSys }
     });
 
     const insightRaw = insightResponse.text;
-    if (!insightRaw) {
-      throw new Error("AI failed to generate insights.");
-    }
+    if (!insightRaw) throw new Error("AI failed to generate insights.");
+
     const insightData = parseTuneResponse(insightRaw);
 
     const insight: AnalystInsight = {
@@ -385,7 +387,9 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
       strategicAnalysis: plan.strategicAnalysis,
       data,
       insight,
-      engine: statisticalForecasts ? `Holt-Winters + Gemini Paid (${insightModel})` : `Gemini Paid (${sqlModel})`
+      engine: statisticalForecasts
+        ? `Holt-Winters + Gemini (${insightModel})`
+        : `Gemini (${sqlModel})`
     };
 
   } catch (error: any) {
@@ -412,7 +416,6 @@ export const initSchema = async (urlOverride?: string): Promise<{ success: boole
     console.warn("Could not fetch dynamic schema, using static fallback.");
   }
 
-  // Fallback to static data from constants
   const staticData: Record<string, string[]> = {};
   Object.keys(SCHEMA_MAP).forEach(key => {
     const shortKey = key.replace("dbo.", "");
@@ -423,7 +426,6 @@ export const initSchema = async (urlOverride?: string): Promise<{ success: boole
 };
 
 export const getAnalystInsight = async (queryResult: QueryResult): Promise<AnalystInsight & { engine: string }> => {
-  // This is now handled within analyzeQuery for efficiency
   return {
     summary: "Analysis complete.",
     trends: [],
@@ -433,6 +435,6 @@ export const getAnalystInsight = async (queryResult: QueryResult): Promise<Analy
   };
 };
 
-export const generateStrategicBrief = async (data: any): Promise<{text: string, engine: string} | null> => {
+export const generateStrategicBrief = async (data: any): Promise<{ text: string, engine: string } | null> => {
   return null;
 };
