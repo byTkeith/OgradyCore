@@ -5,8 +5,11 @@ import { QueryResult, AnalystInsight } from "../types";
 let schemaCache: Record<string, string[]> = {};
 
 const getSettings = () => {
-  const storedUrl = localStorage.getItem('og_bridge_url');
-  let baseUrl = storedUrl || DEFAULT_BRIDGE_URL;
+  let storedUrl = null;
+  if (typeof window !== 'undefined') {
+    storedUrl = localStorage.getItem('og_bridge_url');
+  }
+  let baseUrl = storedUrl || process.env.BRIDGE_URL || DEFAULT_BRIDGE_URL;
   return { bridgeUrl: baseUrl.replace(/\/$/, "") };
 };
 

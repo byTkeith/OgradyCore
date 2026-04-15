@@ -1,17 +1,18 @@
 // CREATE THIS FILE AT: api/execute.ts
-// PURPOSE: Receives { sql } from forecaster (Vercel), forwards to main.py via ngrok
+// PURPOSE: Receives { prompt } from forecaster (Vercel), uses Gemini to generate SQL, forwards to main.py via ngrok, and returns data
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { analyzeQuery } from '../services/geminiService'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { sql } = req.body
+  const { prompt } = req.body
 
-  if (!sql) {
-    return res.status(400).json({ error: 'Missing sql in request body' })
+  if (!prompt) {
+    return res.status(400).json({ error: 'Missing prompt in request body' })
   }
 
   const bridgeUrl = process.env.BRIDGE_URL
@@ -21,36 +22,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    console.log(`Forwarding SQL to bridge: ${bridgeUrl}/api/execute`)
+    console.log(`Analyzing prompt and forwarding to bridge: ${bridgeUrl}`)
 
-    const response = await fetch(`${bridgeUrl}/api/execute`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'  // prevents ngrok HTML interception
-      },
-      body: JSON.stringify({ sql }),
-      signal: AbortSignal.timeout(55000) // 55s — just under Vercel's 60s limit
-    })
+    // analyzeQuery handles generating the SQL, executing it on the bridge, and generating insights
+    const result = await analyzeQuery(prompt)
 
-    const text = await response.text() // read as text first to avoid JSON parse crash
-
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch {
-      console.error('Non-JSON response from bridge:', text)
-      return res.status(502).json({ error: 'Bridge returned invalid JSON', raw: text })
-    }
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data })
-    }
-
-    return res.status(200).json(data)
+    return res.status(200).json(result)
 
   } catch (e: any) {
-    console.error('Bridge connection error:', e)
+    console.error('Pipeline error:', e)
     return res.status(500).json({ error: e.message })
   }
 }
