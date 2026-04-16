@@ -224,8 +224,8 @@ const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
   const ai = new GoogleGenAI({ apiKey });
 
   const fallbackModels = [
-    "gemini-2.0-flash",
-    "gemini-2.5-pro-preview-03-25",
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview",
   ];
 
   const generateContentWithFallback = async (requestConfig: any) => {
