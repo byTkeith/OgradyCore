@@ -173,7 +173,7 @@ const ChatInterface: React.FC = () => {
         backgroundColor: '#020617',
         logging: false,
         width: 1200,
-        onclone: (clonedDoc) => {
+        onclone: (clonedDoc: Document) => {
           const clonedElement = clonedDoc.body.querySelector(`[data-pdf-id="${index}"]`) as HTMLElement;
           if (clonedElement) {
             clonedElement.style.width = '1200px';
