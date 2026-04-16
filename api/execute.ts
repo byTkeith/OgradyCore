@@ -102,7 +102,7 @@ const getSystemInstruction = (now: string) => {
 ## 4. EXAMPLE FOR FISCAL YEAR STOCK:
 Prompt: "How much stock was on hand in FY 2025?"
 SQL:
-SELECT TOP 1 ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
+SELECT ProductName, CurrentWarehouseSOH, LastKnownLedgerSOH, TranDate
 FROM v_AI_Inventory_History_Truth
 WHERE ProductName LIKE '%VALUE COAT%' AND FiscalYear = 2025
 ORDER BY TranDate DESC;
