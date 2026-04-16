@@ -1,6 +1,6 @@
 // api/execute.ts on core
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { analyzeQuery } from '../_services/geminiService'
+import { analyzeQuery } from './_services/geminiService'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

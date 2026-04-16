@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../constants";
-import { QueryResult, AnalystInsight } from "../types";
+import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../../constants";
+import { QueryResult, AnalystInsight } from "../../types";
 
 let schemaCache: Record<string, string[]> = {};
 

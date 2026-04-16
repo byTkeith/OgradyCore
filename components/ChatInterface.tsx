@@ -168,7 +168,7 @@ const ChatInterface: React.FC = () => {
       element.style.overflow = 'visible';
       
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 2 as any,
         useCORS: true,
         backgroundColor: '#020617',
         logging: false,
@@ -193,7 +193,7 @@ const ChatInterface: React.FC = () => {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pdfWidth - (2 * margin);
-      const imgProps = pdf.getImageProperties(imgData);
+      const imgProps = (pdf as any).getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       
       let heightLeft = imgHeight;
