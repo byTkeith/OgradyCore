@@ -168,7 +168,7 @@ const ChatInterface: React.FC = () => {
       element.style.overflow = 'visible';
       
       const canvas = await html2canvas(element, {
-        scale: 2 as any,
+        scale: 2,
         useCORS: true,
         backgroundColor: '#020617',
         logging: false,
@@ -182,7 +182,7 @@ const ChatInterface: React.FC = () => {
             clonedElement.style.border = 'none';
           }
         }
-      });
+      } as any);
 
       element.style.cssText = originalStyle;
 
