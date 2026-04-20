@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+//import { GoogleGenAI } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../../constants";
 import { QueryResult, AnalystInsight } from "../../types";
