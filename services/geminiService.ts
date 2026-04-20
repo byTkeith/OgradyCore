@@ -1,4 +1,3 @@
-//import { GoogleGenAI } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { DEFAULT_BRIDGE_URL, SCHEMA_MAP } from "../constants";
 import { QueryResult, AnalystInsight } from "../types";
@@ -56,29 +55,29 @@ const getSystemInstruction = (now: string) => {
 - **PURPOSE**: Use for Revenue, Profit, Sales Rep Performance, and Qty SOLD.
 - **RULE**: If the user asks "How much did we SELL," use this view.
 - **RULE**: Do NOT use this view for "How much did we HAVE on hand."
-- **DATE FILTERING**: Use \`TranDate\` or \`TransactionDate\` for date filtering. NEVER use \`Date\`.
+- **DATE FILTERING**: Use 'TranDate' or 'TransactionDate' for date filtering. NEVER use 'Date'.
 
 ## 2. INVENTORY VALUATION & AUDIT PROTOCOL
 
 ### VIEW: [v_AI_Inventory_History_Truth]
 
 ### CORE METRICS:
-- \`CurrentWarehouseSOH\`: Use for physical warehouse counts.
-- \`Inventory_Worth_ExclVAT\`: Use to report the total financial value of stock on hand.
-- \`Stock_Drift_Value\`: Use to identify discrepancies between the warehouse and the ledger.
+- 'CurrentWarehouseSOH': Use for physical warehouse counts.
+- 'Inventory_Worth_ExclVAT': Use to report the total financial value of stock on hand.
+- 'Stock_Drift_Value': Use to identify discrepancies between the warehouse and the ledger.
 
 ### REORDER LOGIC:
-- If \`Stock_Alert_Status\` is 'REORDER', highlight this product as a supply chain risk.
+- If 'Stock_Alert_Status' is 'REORDER', highlight this product as a supply chain risk.
 
 ### RULES:
-- **FORBIDDEN**: Never use \`SUM()\` for stock counts unless summarizing a whole group.
-- Use \`MAX(CurrentWarehouseSOH)\` when grouping by product to avoid double-counting.
+- **FORBIDDEN**: Never use 'SUM()' for stock counts unless summarizing a whole group.
+- Use 'MAX(CurrentWarehouseSOH)' when grouping by product to avoid double-counting.
 
 ## 3. RULES FOR THE AI AGENT:
 - **NO CROSS-OVER**: Never try to find stock in the Sales view.
-- **NO JOINS**: Everything is pre-calculated. Do not use the \`JOIN\` keyword.
-- **IDENTITY**: Always filter BUCO using \`BranchName LIKE '%BUCO%'\`.
-- **TYPE-CASTING HARDENING**: Always cast \`SalesRep\` and \`AccountType\` to \`VARCHAR\` during comparisons.
+- **NO JOINS**: Everything is pre-calculated. Do not use the 'JOIN' keyword.
+- **IDENTITY**: Always filter BUCO using "BranchName LIKE '%BUCO%'".
+- **TYPE-CASTING HARDENING**: Always cast 'SalesRep' and 'AccountType' to 'VARCHAR' during comparisons.
 
 ## 4. EXAMPLE FOR FISCAL YEAR STOCK:
 Prompt: "How much stock was on hand in FY 2025?"
@@ -90,13 +89,13 @@ ORDER BY TranDate DESC;
 
 ## 5. THE BUNDLING RULE (NO DUPLICATION)
 - **CRITICAL**: When asked for a list of "Top Products" or "Trends," aggregate so each Product appears on **ONLY ONE ROW**.
-- **ACTION**: Do NOT include \`TimeKey\`, \`TranDate\`, or \`FiscalYear\` in \`SELECT\` or \`GROUP BY\` unless the user asks for "Monthly Breakdown", "Graph", or "Forecast".
+- **ACTION**: Do NOT include 'TimeKey', 'TranDate', or 'FiscalYear' in 'SELECT' or 'GROUP BY' unless the user asks for "Monthly Breakdown", "Graph", or "Forecast".
 
 ## 6. FORECASTING PROTOCOL (THE STATS PIPELINE)
 - When a prompt contains "Forecast":
-  1. Generate SQL from \`v_AI_Forecasting_Feed\` for the requested time period.
-  2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include \`TimeKey\` and \`ProductName\` in \`SELECT\` and \`GROUP BY\` for Forecasts.
-  3. NEVER calculate \`AVG\`, \`ROUND\`, or \`SuggestedWeeklyStock\` in SQL. Just fetch raw \`SUM(MonthlyNetQty)\` and \`SUM(MonthlyNetRevenue)\`.
+  1. Generate SQL from 'v_AI_Forecasting_Feed' for the requested time period.
+  2. **CRITICAL EXCEPTION TO BUNDLING**: You MUST include 'TimeKey' and 'ProductName' in 'SELECT' and 'GROUP BY' for Forecasts.
+  3. NEVER calculate 'AVG', 'ROUND', or 'SuggestedWeeklyStock' in SQL. Just fetch raw 'SUM(MonthlyNetQty)' and 'SUM(MonthlyNetRevenue)'.
   4. Hand this data to the **Statistical Model** by simply outputting the SQL.
 
   *Example: Forecast top 30 products by revenue over 2 years.*
@@ -118,27 +117,27 @@ ORDER BY TranDate DESC;
   GROUP BY t.TimeKey, t.ProductName
   ORDER BY t.ProductName, t.TimeKey ASC;
 
-  5. The model returns the \`SuggestedWeeklyStock\`.
+  5. The model returns the 'SuggestedWeeklyStock'.
   6. Display: [Product Name] | [Total Revenue] | [Current Stock] | [Suggested Weekly Stock].
 
 ## 7. SEMANTIC MAPPING (SYNONYMS)
-- Always use \`LIKE '%...%'\` for \`ProductName\` and \`BranchName\`.
-- \`BranchName\` and \`CustomerName\` are identical.
-- \`MonthlyRevenue\`, \`Revenue\`, and \`NetRevenue\` are identical.
-- **Pack Sizes**: Ignore \`PackSize\` unless user specifically asks for "5L" or "20L".
+- Always use "LIKE '%...%'" for 'ProductName' and 'BranchName'.
+- 'BranchName' and 'CustomerName' are identical.
+- 'MonthlyRevenue', 'Revenue', and 'NetRevenue' are identical.
+- **Pack Sizes**: Ignore 'PackSize' unless user specifically asks for "5L" or "20L".
 
 ## 8. THE FISCAL MANDATE
 - The business runs on a **March 1st - February 28th** Fiscal Year.
 - The current Fiscal Year is **${currentFiscalYear}**.
 - When the user asks for "trends over the last two years":
-  \`WHERE FiscalYear >= ${currentFiscalYear - 2}\`
+  "WHERE FiscalYear >= ${currentFiscalYear - 2}"
 
 ## 9. INVENTORY TRACKING PROTOCOL
 - **KEY COLUMNS**:
-  - \`CurrentStockOnHand\`: Current physical stock in the factory.
-  - \`StockAtTimeOfSale\`: Historical audits of stock levels on specific dates.
-  - \`MinimumStockLevel\`: Safety threshold. If \`CurrentStockOnHand\` is lower, flag as "URGENT REORDER."
-  - \`Quantity\`: Amount of stock currently moving (Sales velocity).
+  - 'CurrentStockOnHand': Current physical stock in the factory.
+  - 'StockAtTimeOfSale': Historical audits of stock levels on specific dates.
+  - 'MinimumStockLevel': Safety threshold. If 'CurrentStockOnHand' is lower, flag as "URGENT REORDER."
+  - 'Quantity': Amount of stock currently moving (Sales velocity).
 
 ## OUTPUT FORMAT (TUNE) — strictly follow, no markdown backticks:
 >>>SQL
@@ -197,8 +196,8 @@ const parseTuneResponse = (rawText: string) => {
     const tag = match[1];
     let content = match[2].trim();
 
-    if (content.startsWith("```")) {
-      content = content.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "");
+    if (content.startsWith("\`\`\`")) {
+      content = content.replace(/^\`\`\`[a-zA-Z]*\n?/, "").replace(/\n?\`\`\`$/, "");
     }
 
     if (keyMap[tag]) {
@@ -232,11 +231,8 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     let lastError: any;
     for (const model of fallbackModels) {
       try {
-        const response = await ai.models.generateContent({
-          ...requestConfig,
-          model
-        });
-        return { response, usedModel: model };
+        const result = await ai.getGenerativeModel({ model }).generateContent(requestConfig);
+        return { response: result.response, usedModel: model };
       } catch (error: any) {
         console.warn(`Model ${model} failed:`, error.message);
         lastError = error;
@@ -250,10 +246,8 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   try {
     // 0. Pre-check for Statistical Forecast
     if (prompt.toLowerCase().includes("forecast") || prompt.toLowerCase().includes("predict")) {
-      const { response: extractRes } = await generateContentWithFallback({
-        contents: `Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`,
-      });
-      const productName = extractRes.text?.trim() || "NONE";
+      const { response: extractRes } = await generateContentWithFallback(`Extract the product name from this request. If no specific product is mentioned, return "NONE". Request: "${prompt}"`);
+      const productName = extractRes.text().trim() || "NONE";
 
       if (productName !== "NONE") {
         const forecastEndpoint = `${bridgeUrl}/api/forecast`;
@@ -295,13 +289,11 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
 
     // 1. Generate SQL with Gemini
     const { response, usedModel: sqlModel } = await generateContentWithFallback({
-      contents: prompt,
-      config: {
-        systemInstruction: getSystemInstruction(now),
-      }
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: getSystemInstruction(now),
     });
 
-    const aiRaw = response.text;
+    const aiRaw = response.text();
     if (!aiRaw) throw new Error("AI failed to generate a valid response.");
 
     const plan = parseTuneResponse(aiRaw);
@@ -367,11 +359,11 @@ Executive Summary: A high-impact, one-sentence strategic overview.
 - Long-term growth strategy based on the data.`;
 
     const { response: insightResponse, usedModel: insightModel } = await generateContentWithFallback({
-      contents: insightPrompt,
-      config: { systemInstruction: insightSys }
+      contents: [{ role: "user", parts: [{ text: insightPrompt }] }],
+      systemInstruction: insightSys,
     });
 
-    const insightRaw = insightResponse.text;
+    const insightRaw = insightResponse.text();
     if (!insightRaw) throw new Error("AI failed to generate insights.");
 
     const insightData = parseTuneResponse(insightRaw);
