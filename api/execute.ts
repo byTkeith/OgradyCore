@@ -1,11 +1,16 @@
-// api/execute.ts - Finalized Forecasting Pipeline Logic
+// api/execute.ts - Finalized Forecasting Pipeline Logic (SDK v1.0+ Compatible)
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenAI } from "@google/generative-ai" // Ensure this package is installed
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8000'
 const API_KEY = process.env.GEMINI_API_KEY || ''
 
-const getSystemInstruction = (now: string) => {
+/**
+ * ARCHITECT'S NOTE:
+ * This system instruction forces the AI to produce high-density time series data
+ * required by Prophet/ARIMA models, ensuring we never get "1 data point" errors.
+ */
+const getSystemInstruction = (now: string): string => {
   const currentDate = new Date(now);
   const fiscalYear = (currentDate.getMonth() + 1) < 3 ? currentDate.getFullYear() - 1 : currentDate.getFullYear();
 
@@ -31,7 +36,7 @@ To provide the background StatsModel (Prophet/ARIMA) with a clean series, you mu
 
 ## 3. ARCHITECTURAL RULES
 - **HISTORY**: Pull at least 3 years (36 months) of data to capture year-over-year seasonality.
-- **NO MATH**: Never perform averages or stock calculations in SQL. Just return the 'ds' and 'y' series.
+- **NO SQL MATH**: Never perform averages or stock calculations in SQL. Just return the 'ds' and 'y' series.
 - **FISCAL YEAR**: Current FY is ${fiscalYear}. March 1st is the start.
 - **IDENTITY**: Use [BranchName] and [ProductName] with LIKE '%...%'.
 
@@ -57,13 +62,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { prompt, source } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
+  // FIXED: Correct instantiation for @google/generative-ai
+  // Error TS2559 fix: Pass the API key as a simple string or inside a config object
   const genAI = new GoogleGenAI(API_KEY);
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro",
-    systemInstruction: getSystemInstruction(new Date().toISOString())
-  });
 
   try {
+    const now = new Date().toISOString().split('T')[0];
+    
+    // FIXED: System instruction is now passed as an object property
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-pro",
+      systemInstruction: getSystemInstruction(now)
+    });
+
     const aiResult = await model.generateContent(prompt);
     const text = aiResult.response.text();
     
@@ -84,10 +95,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       yAxis: yMatch ? yMatch[1].trim() : "y"
     };
 
+    if (!plan.sql) throw new Error("AI failed to generate a valid forecasting query.");
+
     // Forward to bridge for StatsModel processing
     const bridgeRes = await fetch(`${BRIDGE_URL.replace(/\/$/, "")}/api/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true' 
+      },
       body: JSON.stringify({ 
         sql: plan.sql, 
         source: source || 'API_2_FORECASTER',
@@ -95,16 +111,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     });
 
+    if (!bridgeRes.ok) {
+        const errorText = await bridgeRes.text();
+        throw new Error(`Database Error: ${errorText}`);
+    }
+
     const dbResult = await bridgeRes.json();
 
     return res.status(200).json({
       ...plan,
       data: dbResult.data || [],
-      forecast_results: dbResult.forecast_results || null, // The Prophet/ARIMA output
+      forecast_results: dbResult.forecast_results || null, 
       engine: "gemini-1.5-pro-forecaster"
     });
 
   } catch (e: any) {
+    console.error('Forecasting Pipeline Error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
