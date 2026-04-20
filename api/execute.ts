@@ -1,18 +1,19 @@
-// api/execute.ts - Finalized Forecasting Pipeline Logic (SDK v1.0+ Compatible)
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { GoogleGenAI } from "@google/generative-ai" // Ensure this package is installed
+// api/execute.ts - Finalized Forecasting Pipeline Logic (SDK v1.x Compliant)
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8000'
-const API_KEY = process.env.GEMINI_API_KEY || ''
+// ============ CONFIGURATION ============
+const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8000';
+const API_KEY = process.env.GEMINI_API_KEY || '';
 
 /**
  * ARCHITECT'S NOTE:
- * This system instruction forces the AI to produce high-density time series data
- * required by Prophet/ARIMA models, ensuring we never get "1 data point" errors.
+ * This system instruction is the "Logic Lock." It forces the AI to provide
+ * the high-density time series data required for Prophet/ARIMA/Holt-Winters.
  */
 const getSystemInstruction = (now: string): string => {
   const currentDate = new Date(now);
-  const fiscalYear = (currentDate.getMonth() + 1) < 3 ? currentDate.getFullYear() - 1 : currentDate.getFullYear();
+  const currentFiscalYear = (currentDate.getMonth() + 1) < 3 ? currentDate.getFullYear() - 1 : currentDate.getFullYear();
 
   return `
 # ROLE: SENIOR STATISTICAL DATA HARVESTER
@@ -21,11 +22,11 @@ const getSystemInstruction = (now: string): string => {
 Use this view specifically for "Forecast", "Prediction", and "Inventory Modeling" prompts.
 - **ds**: Date Stamp (Daily level).
 - **y**: Net Quantity (The target variable for models).
-- **Revenue**: Total net revenue.
-- **CurrentStockOnHand**: Use this to compare the forecast against real-time warehouse levels.
+- **Revenue**: Total net revenue (Five-Nines Accuracy).
+- **CurrentStockOnHand**: Use to compare the forecast against real-time warehouse levels.
 
 ## 2. AGGREGATION PROTOCOLS (MANDATORY)
-To provide the background StatsModel (Prophet/ARIMA) with a clean series, you must aggregate based on the requested scope:
+To provide the background StatsModel with a clean series, you must aggregate based on the requested scope:
 
 - **DAILY**: 
   SELECT ds, ProductName, SUM(y) AS y FROM v_AI_Forecasting_Engine_Granular GROUP BY ds, ProductName
@@ -36,8 +37,8 @@ To provide the background StatsModel (Prophet/ARIMA) with a clean series, you mu
 
 ## 3. ARCHITECTURAL RULES
 - **HISTORY**: Pull at least 3 years (36 months) of data to capture year-over-year seasonality.
-- **NO SQL MATH**: Never perform averages or stock calculations in SQL. Just return the 'ds' and 'y' series.
-- **FISCAL YEAR**: Current FY is ${fiscalYear}. March 1st is the start.
+- **NO SQL MATH**: Never perform averages or stock calculations in SQL. Return the raw 'ds' and 'y' series.
+- **FISCAL YEAR**: Current FY is ${currentFiscalYear}. March 1st is the start.
 - **IDENTITY**: Use [BranchName] and [ProductName] with LIKE '%...%'.
 
 ## 4. OUTPUT FORMAT:
@@ -62,23 +63,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { prompt, source } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
-  // FIXED: Correct instantiation for @google/generative-ai
-  // Error TS2559 fix: Pass the API key as a simple string or inside a config object
-  const genAI = new GoogleGenAI(API_KEY);
-
   try {
+    // 1. Initialize the SDK with the correct class name
+    const genAI = new GoogleGenerativeAI(API_KEY);
     const now = new Date().toISOString().split('T')[0];
-    
-    // FIXED: System instruction is now passed as an object property
+
+    // 2. Instantiate model with systemInstruction in the config object
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-pro",
       systemInstruction: getSystemInstruction(now)
     });
 
+    // 3. Generate Content
     const aiResult = await model.generateContent(prompt);
     const text = aiResult.response.text();
     
-    // Standard Tag Parser
+    // 4. Tag Parser (Safe regex)
     const sqlMatch = text.match(/>>>SQL\s*([\s\S]*?)(?=\s*>>>|$)/);
     const expMatch = text.match(/>>>EXP\s*([\s\S]*?)(?=\s*>>>|$)/);
     const stratMatch = text.match(/>>>STRAT\s*([\s\S]*?)(?=\s*>>>|$)/);
@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!plan.sql) throw new Error("AI failed to generate a valid forecasting query.");
 
-    // Forward to bridge for StatsModel processing
+    // 5. Execute against MSSQL via Bridge
     const bridgeRes = await fetch(`${BRIDGE_URL.replace(/\/$/, "")}/api/execute`, {
       method: 'POST',
       headers: { 
@@ -113,20 +113,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!bridgeRes.ok) {
         const errorText = await bridgeRes.text();
-        throw new Error(`Database Error: ${errorText}`);
+        throw new Error(`Database Bridge Error: ${errorText}`);
     }
 
     const dbResult = await bridgeRes.json();
 
+    // 6. Return harmonized payload to the Frontend
     return res.status(200).json({
       ...plan,
       data: dbResult.data || [],
-      forecast_results: dbResult.forecast_results || null, 
+      forecast_results: dbResult.forecast_results || null, // Captures Python StatsModel results
       engine: "gemini-1.5-pro-forecaster"
     });
 
   } catch (e: any) {
-    console.error('Forecasting Pipeline Error:', e.message);
+    console.error('Forecasting Pipeline Critical Error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
