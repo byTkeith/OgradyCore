@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...plan,
       data: dbResult.data || [],
       forecast_results: dbResult.forecast_results || null,
-      engine: "gemini-1.5-pro"
+      engine: "gemini-3.1-pro-preview"
     });
 
   } catch (e: any) {
