@@ -221,7 +221,7 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
     throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenerativeAI( apiKey );
 
   const fallbackModels = [
     "gemini-3.1-pro-preview",
