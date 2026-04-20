@@ -213,7 +213,8 @@ const parseTuneResponse = (rawText: string) => {
   return Object.keys(data).length > 0 ? data : null;
 };
 
-const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
+// MODIFIED: Accept source and needs_forecasting parameters to proxy downwards
+const analyzeQuery = async (prompt: string, source?: string, needs_forecasting?: boolean): Promise<QueryResult> => {
   const { bridgeUrl } = getSettings();
   const apiKey = getApiKey();
 
@@ -264,13 +265,20 @@ const analyzeQuery = async (prompt: string): Promise<QueryResult> => {
   // Execute SQL via bridge
   const executeEndpoint = `${bridgeUrl}/api/execute`;
   
+  // MODIFIED: Pass the source markers securely to main.py
+  const payloadToMainPy = { 
+    sql: plan.sql,
+    source: source || null,
+    needs_forecasting: needs_forecasting || false
+  };
+
   const executeRes = await fetch(executeEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true'
     },
-    body: JSON.stringify({ sql: plan.sql })
+    body: JSON.stringify(payloadToMainPy)
   });
 
   if (!executeRes.ok) {
@@ -298,16 +306,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { prompt } = req.body;
+  // MODIFIED: Extract source and needs_forecasting from the incoming request body
+  const { prompt, source, needs_forecasting } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Missing prompt' });
   }
 
   try {
-    console.log('Generating SQL for:', prompt);
+    console.log(`Generating SQL for: ${prompt} (Source: ${source || 'API_1'})`);
 
-    const result = await analyzeQuery(prompt);
+    // MODIFIED: Pass them into the analysis block
+    const result = await analyzeQuery(prompt, source, needs_forecasting);
 
     console.log('Pipeline complete. Engine:', result.engine);
     
