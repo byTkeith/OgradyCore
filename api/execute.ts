@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ARCHITECT'S NOTE: Standardized to 1.5-pro for stable production reasoning.
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro", 
+      model: "gemini-3.1-pro-preview", 
       systemInstruction: getSystemInstruction(now)
     });
 
