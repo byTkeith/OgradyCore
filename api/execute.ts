@@ -1,42 +1,61 @@
-// api/execute.ts
+// api/execute.ts - Cent-Perfect Statistical Forecasting Pipeline
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI } from "@google/generative-ai"; // Corrected import
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// ============ CONFIGURATION ============
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8000';
 const API_KEY = process.env.GEMINI_API_KEY || '';
 
+/**
+ * ARCHITECT'S NOTE:
+ * We have decoupled the logic. 
+ * Use [v_AI_Forecasting_Engine_Granular] for high-resolution stats.
+ * This view provides 'ds' and 'y' for direct ingestion into Prophet/ARIMA.
+ */
 const getSystemInstruction = (now: string): string => {
   const currentDate = new Date(now);
   const currentFiscalYear = (currentDate.getMonth() + 1) < 3 ? currentDate.getFullYear() - 1 : currentDate.getFullYear();
 
   return `
-# ROLE: SENIOR STATISTICAL DEMAND PLANNER
+# ROLE: SENIOR STATISTICAL DATA HARVESTER
 
-## 1. PRIMARY DATA SOURCE: [v_AI_Omnibus_Master_Truth]
-This is your God View. It contains cent-perfect Revenue, NetQty, Cost, GrossProfit, and Warehouse Stock.
-- **FORCASTING MANDATE**: You MUST pull a 36-month time series. 
-- **STRUCTURE**: Group by [TimeKey] and [ProductName].
-- **ORDER**: Always [ORDER BY TimeKey ASC].
-- **ACCURACY**: Use [MonthlyRevenue] and [MonthlyQty]. These are Five-Nines verified.
+## 1. PRIMARY FORECASTING VIEW: [v_AI_Forecasting_Engine_Granular]
+Use this view specifically for "Forecast", "Prediction", and "Inventory Modeling" prompts.
+- **ds**: Date Stamp (Daily level granularity).
+- **y**: Net Quantity (The FIVE-NINES cent-perfect target variable).
+- **Revenue**: Total net revenue for financial weighted analysis.
+- **CurrentStockOnHand**: Real-time warehouse levels to compare against the forecast.
 
-## 2. ARCHITECTURAL GUARDRAILS
-- **NO SQL MATH**: Do not calculate safety stock in SQL. The backend StatsEngine handles the modeling.
+## 2. AGGREGATION PROTOCOLS (MANDATORY)
+To provide the background StatsModel (Prophet/ARIMA) with a clean series, you must aggregate based on the requested scope:
+
+- **DAILY**: 
+  SELECT ds, ProductName, SUM(y) AS y FROM v_AI_Forecasting_Engine_Granular GROUP BY ds, ProductName
+- **WEEKLY**: 
+  SELECT DATEADD(WEEK, DATEDIFF(WEEK, 0, ds), 0) AS ds, ProductName, SUM(y) AS y FROM v_AI_Forecasting_Engine_Granular GROUP BY DATEADD(WEEK, DATEDIFF(WEEK, 0, ds), 0), ProductName
+- **MONTHLY**: 
+  SELECT DATEFROMPARTS(YEAR(ds), MONTH(ds), 1) AS ds, ProductName, SUM(y) AS y FROM v_AI_Forecasting_Engine_Granular GROUP BY DATEFROMPARTS(YEAR(ds), MONTH(ds), 1), ProductName
+
+## 3. ARCHITECTURAL RULES
+- **TIME SERIES MANDATE**: You MUST pull at least 3 years (36 months) of data. NEVER fetch a single row.
+- **NO SQL MATH**: Do not calculate safety stock or averages in SQL. Return the raw 'ds' and 'y' series.
 - **FISCAL YEAR**: Current FY is ${currentFiscalYear}. Starts March 1st.
-- **FILTER**: Always filter [WHERE TranDate <= CAST(GETDATE() AS DATE)] to exclude Year 2085 pollution.
+- **DATA INTEGRITY**: Always filter [WHERE ds <= CAST(GETDATE() AS DATE)] to exclude Year 2085 pollution.
+- **IDENTITY**: Use [BranchName] and [ProductName] with LIKE '%...%'.
 
-## 3. OUTPUT FORMAT (STRICT):
+## 4. OUTPUT FORMAT (STRICT):
 >>>SQL
-{The generated MSSQL query}
+{Your Generated MSSQL Query}
 >>>EXP
-{Identify the scope: Daily/Weekly/Monthly}
+{Identify the time-series scope: Daily/Weekly/Monthly}
 >>>STRAT
-{Strategic insight based on 3-year history}
+{Strategic insight based on the historical movement detected}
 >>>VIZ
 line
 >>>X
-TimeKey
+ds
 >>>Y
-MonthlyQty
+y
 `;
 };
 
@@ -47,19 +66,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
   try {
-    // 1. Initialize the SDK (Correct class name for v0.24.1)
     const genAI = new GoogleGenerativeAI(API_KEY);
-    
-    // 2. Instantiate Model (1.5 Pro is the top-tier paid model)
+    const now = new Date().toISOString().split('T')[0];
+
+    // ARCHITECT'S NOTE: Standardized to 1.5-pro for stable production reasoning.
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3.1-pro-preview", 
-      systemInstruction: getSystemInstruction(new Date().toISOString())
+      model: "gemini-1.5-pro", 
+      systemInstruction: getSystemInstruction(now)
     });
 
     const aiResult = await model.generateContent(prompt);
     const text = aiResult.response.text();
     
-    // 3. Tag Parser
+    // Tag Parser
     const sqlMatch = text.match(/>>>SQL\s*([\s\S]*?)(?=\s*>>>|$)/);
     const expMatch = text.match(/>>>EXP\s*([\s\S]*?)(?=\s*>>>|$)/);
     const stratMatch = text.match(/>>>STRAT\s*([\s\S]*?)(?=\s*>>>|$)/);
@@ -72,14 +91,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       explanation: expMatch ? expMatch[1].trim() : "",
       strategicAnalysis: stratMatch ? stratMatch[1].trim() : "",
       visualizationType: vizMatch ? vizMatch[1].trim() : "line",
-      xAxis: xMatch ? xMatch[1].trim() : "TimeKey",
-      yAxis: yMatch ? yMatch[1].trim() : "MonthlyQty"
+      xAxis: xMatch ? xMatch[1].trim() : "ds",
+      yAxis: yMatch ? yMatch[1].trim() : "y"
     };
 
-    // 4. Execute via Bridge
+    if (!plan.sql) throw new Error("AI failed to generate a valid forecasting query.");
+
+    // 5. Forward to Bridge for StatsModel (Prophet/ARIMA) processing
     const bridgeRes = await fetch(`${BRIDGE_URL.replace(/\/$/, "")}/api/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true' 
+      },
       body: JSON.stringify({ 
         sql: plan.sql, 
         source: source || 'API_2_FORECASTER',
@@ -87,13 +111,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     });
 
+    if (!bridgeRes.ok) {
+        const errorText = await bridgeRes.text();
+        throw new Error(`Database Bridge Error: ${errorText}`);
+    }
+
     const dbResult = await bridgeRes.json();
 
     return res.status(200).json({
       ...plan,
       data: dbResult.data || [],
-      forecast_results: dbResult.forecast_results || null,
-      engine: "gemini-3.1-pro-preview"
+      forecast_results: dbResult.forecast_results || null, // Capture results from Prophet/ARIMA
+      engine: "gemini-1.5-pro-forecaster"
     });
 
   } catch (e: any) {
