@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // 2. Instantiate Model (1.5 Pro is the top-tier paid model)
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro", 
+      model: "gemini-3.1-pro-preview", 
       systemInstruction: getSystemInstruction(new Date().toISOString())
     });
 
