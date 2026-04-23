@@ -160,6 +160,20 @@ FROM v_AI_Omnibus_Master_Truth
 WHERE ProductBaseName LIKE '%VALUE COAT 20%' 
 GROUP BY ProductBaseName;
 
+## 11. FINANCIAL TAX PROTOCOL
+
+### 1. VAT & TAX COLUMNS:
+- Use 'VAT_Amount' or 'TaxValue'.
+- This column is the cent-perfect delta between the inclusive and exclusive price.
+- **RULE**: To find the company's true performance, use 'Revenue'. To find the government's portion, use 'VAT_Amount'.
+
+### 2. TOTAL RETAIL (INCL VAT):
+- If the user asks for "Total Sales including Tax" or "Total Retail Value", use 'TotalSalesInclVAT'.
+
+### 3. PROMPT HIERARCHY:
+- If asked for "VAT separated by year", use:
+  "SELECT FiscalYear, SUM(VAT_Amount) FROM v_AI_Omnibus_Master_Truth GROUP BY FiscalYear"
+
 ## OUTPUT FORMAT (TUNE) — strictly follow, no markdown backticks:
 >>>SQL
 SELECT ...
@@ -244,8 +258,8 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   const ai = new GoogleGenerativeAI( apiKey );
 
   const fallbackModels = [
-    //"gemini-3.1-pro-preview",
-    "gemini-2.5-pro",
+    "gemini-3.1-pro-preview",
+    //"gemini-3.0-flash-preview",
   ];
 
   const generateContentWithFallback = async (requestConfig: any) => {

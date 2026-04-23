@@ -27,7 +27,7 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.v_AI_Omnibus_Master_Truth": {
     description: "THE MASTER TRUTH: The single source of truth for all BI analysis. Includes historical audits, trends, and forecasting. Replaces all previous views.",
     primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],
-    fields: ["BranchName", "CustomerGroup", "SalesRepName", "ProductName", "ProductBaseName", "TimeKey", "Period", "FiscalYear", "MonthlyRevenue", "Revenue", "ActualRevenue", "MonthlyQty", "LastYearRevenue", "PrevYearRev", "ProjectedRunRate", "CurrentRunRate", "Momentum", "MomentumStatus", "PerformanceStatus", "InvoiceNumber", "TranDate", "NetCost", "GrossProfit"]
+    fields: ["BranchName", "CustomerGroup", "SalesRepName", "ProductName", "ProductBaseName", "TimeKey", "Period", "FiscalYear", "MonthlyRevenue", "Revenue", "ActualRevenue", "MonthlyQty", "LastYearRevenue", "PrevYearRev", "ProjectedRunRate", "CurrentRunRate", "Momentum", "MomentumStatus", "PerformanceStatus", "InvoiceNumber", "TranDate", "NetCost", "GrossProfit", "VAT_Amount", "TaxValue", "TotalSalesInclVAT"]
   },
   "dbo.v_AI_Omnibus_Forecast_Master": {
     description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes Period (Label), MonthlyRevenue, MonthlyQty, PrevMonthRev, LastYearRevenue (Seasonality), ProjectedRunRate (Momentum), Momentum (Numeric change), and MomentumStatus (Improving/Declining). Use for all future projections.",
