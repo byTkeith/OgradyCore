@@ -6,6 +6,7 @@ export const CORE_TABLES = [
   "dbo.v_AI_Omnibus_Forecast_Master",
   "dbo.v_AI_Omnibus_Comparison",
   "dbo.v_AI_Stock_Catalog",
+  "dbo.v_AI_Inventory_Truth",
   "dbo.v_AI_Sales_Truth",
   "dbo.v_AI_Branch_Trends_5Yr",
   "dbo.v_AI_Product_Size_Trends",
@@ -26,7 +27,7 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
   "dbo.v_AI_Omnibus_Master_Truth": {
     description: "THE MASTER TRUTH: The single source of truth for all BI analysis. Includes historical audits, trends, and forecasting. Replaces all previous views.",
     primaryKeys: ["BranchName", "SalesRepName", "ProductName", "TimeKey"],
-    fields: ["BranchName", "SalesRepName", "ProductName", "TimeKey", "Period", "FiscalYear", "MonthlyRevenue", "Revenue", "ActualRevenue", "MonthlyQty", "LastYearRevenue", "PrevYearRev", "ProjectedRunRate", "CurrentRunRate", "Momentum", "MomentumStatus", "PerformanceStatus", "InvoiceNumber", "TranDate", "NetCost", "GrossProfit"]
+    fields: ["BranchName", "CustomerGroup", "SalesRepName", "ProductName", "ProductBaseName", "TimeKey", "Period", "FiscalYear", "MonthlyRevenue", "Revenue", "ActualRevenue", "MonthlyQty", "LastYearRevenue", "PrevYearRev", "ProjectedRunRate", "CurrentRunRate", "Momentum", "MomentumStatus", "PerformanceStatus", "InvoiceNumber", "TranDate", "NetCost", "GrossProfit"]
   },
   "dbo.v_AI_Omnibus_Forecast_Master": {
     description: "FORECASTING ENGINE: Predictive intelligence using TimeKey (YYYYMM). Includes Period (Label), MonthlyRevenue, MonthlyQty, PrevMonthRev, LastYearRevenue (Seasonality), ProjectedRunRate (Momentum), Momentum (Numeric change), and MomentumStatus (Improving/Declining). Use for all future projections.",
@@ -42,6 +43,11 @@ export const SCHEMA_MAP: Record<string, { description?: string, primaryKeys: str
     description: "STOCK CATALOG: Inventory master with costs, departments, and status. Use for stock analysis.",
     primaryKeys: ["StockCode", "SiteID"],
     fields: ["SiteID", "StockCode", "ProductName", "MainDepartment", "SubDepartment", "QuantityOnHand", "UnitCost", "ListPrice", "StockStatus", "LastSoldDate", "LastPurchasedDate"]
+  },
+  "dbo.v_AI_Inventory_Truth": {
+    description: "STOCK MACHINE: Current stock levels, inventory counts, and master pricing. Use for current stock analysis.",
+    primaryKeys: ["BranchName", "ProductName"],
+    fields: ["BranchName", "ProductName", "CurrentStockOnHand", "MinimumStockLevel", "StockAtTimeOfSale", "Quantity", "ListPrice", "UnitCost"]
   },
   "dbo.v_AI_Sales_Truth": {
     description: "CORE TRUTH ENGINE: The foundation for all other views. Handles Delphi rounding, tax flags, and compound discounts. Includes TimeKey (YYYYMM) for chronological grouping.",

@@ -139,6 +139,27 @@ ORDER BY TranDate DESC;
   - 'MinimumStockLevel': Safety threshold. If 'CurrentStockOnHand' is lower, flag as "URGENT REORDER."
   - 'Quantity': Amount of stock currently moving (Sales velocity).
 
+## 10. GRANULARITY & HIERARCHY RULES
+
+### CUSTOMER LEVEL
+- For **Individual Stores**: Use 'BranchName'.
+- For **Corporate Groups** (BUCO, BUILD IT, etc.): Use 'CustomerGroup'.
+
+### PRODUCT LEVEL
+- For **Specific Colors/Variants**: Use 'ProductName'.
+- To **Ignore Colors** (summing all variants into one): Use 'ProductBaseName'.
+
+### LOGIC
+- When asked for "Top Products" but example products given are just colors of the same line (e.g., White, Grey, Charcoal), you MUST use 'ProductBaseName' to ensure cent-perfect consolidation.
+
+### EXAMPLE: Consolidated Hierarchy
+Prompt: "Total sales for all 20LT Value Coat, regardless of color."
+SQL: 
+SELECT ProductBaseName, SUM(Revenue) 
+FROM v_AI_Omnibus_Master_Truth 
+WHERE ProductBaseName LIKE '%VALUE COAT 20%' 
+GROUP BY ProductBaseName;
+
 ## OUTPUT FORMAT (TUNE) — strictly follow, no markdown backticks:
 >>>SQL
 SELECT ...
