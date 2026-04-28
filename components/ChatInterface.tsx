@@ -6,6 +6,7 @@ import Visualizer from './Visualizer';
 import InsightPanel from './InsightPanel';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 
 const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({ data, xAxis, yAxis }) => {
   if (!data || data.length === 0) return (
@@ -155,6 +156,23 @@ const ChatInterface: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const resultRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const handleDownloadExcel = (index: number, query: string) => {
+    const item = results[index];
+    if (!item || !item.result.data || item.result.data.length === 0) return;
+
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(item.result.data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+      
+      const safeQueryName = query.replace(/[^a-zA-Z0-9 -]/g, "").substring(0, 30).trim();
+      XLSX.writeFile(workbook, `O_Grady_${safeQueryName || 'Data'}.xlsx`);
+    } catch (err) {
+      console.error("Failed to export Excel:", err);
+      setError("Failed to export Excel. See console for details.");
+    }
+  };
+
   const handleDownloadPDF = async (index: number, query: string) => {
     const element = resultRefs.current[index];
     if (!element) return;
@@ -173,7 +191,7 @@ const ChatInterface: React.FC = () => {
         backgroundColor: '#020617',
         logging: false,
         width: 1200,
-        onclone: (clonedDoc: Document) => {
+        onclone: (clonedDoc) => {
           const clonedElement = clonedDoc.body.querySelector(`[data-pdf-id="${index}"]`) as HTMLElement;
           if (clonedElement) {
             clonedElement.style.width = '1200px';
@@ -182,7 +200,7 @@ const ChatInterface: React.FC = () => {
             clonedElement.style.border = 'none';
           }
         }
-      } as any);
+      });
 
       element.style.cssText = originalStyle;
 
@@ -193,7 +211,7 @@ const ChatInterface: React.FC = () => {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pdfWidth - (2 * margin);
-      const imgProps = (pdf as any).getImageProperties(imgData);
+      const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       
       let heightLeft = imgHeight;
@@ -303,12 +321,22 @@ const ChatInterface: React.FC = () => {
             <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
           </div>
           {results.length > 0 && (
-            <button 
-              onClick={() => handleDownloadPDF(results.length - 1, results[results.length - 1].query)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase px-4 py-1.5 rounded-full shadow-lg transition-all flex items-center gap-2"
-            >
-              <span>📄</span> Export Latest Analysis
-            </button>
+            <div className="flex gap-2">
+              {results[results.length - 1].result.data && results[results.length - 1].result.data.length > 0 && (
+                <button 
+                  onClick={() => handleDownloadExcel(results.length - 1, results[results.length - 1].query)}
+                  className="bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white text-emerald-400 text-[9px] font-black uppercase px-4 py-1.5 rounded-full shadow-lg transition-all flex items-center gap-2"
+                >
+                  <span>📊</span> Export Latest Excel
+                </button>
+              )}
+              <button 
+                onClick={() => handleDownloadPDF(results.length - 1, results[results.length - 1].query)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase px-4 py-1.5 rounded-full shadow-lg transition-all flex items-center gap-2"
+              >
+                <span>📄</span> Export Latest Analysis
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -347,15 +375,28 @@ const ChatInterface: React.FC = () => {
               <div className="bg-slate-800 text-white px-8 py-5 rounded-[2rem] rounded-tr-none shadow-2xl font-black text-lg border border-slate-700 max-w-[95%] md:max-w-[80%] tracking-tight">
                 {item.query}
               </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownloadPDF(idx, item.query);
-                }}
-                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all active:scale-95 border-2 border-white/20 whitespace-nowrap"
-              >
-                <span>📄</span> EXPORT PDF
-              </button>
+              <div className="flex gap-2">
+                {item.result.data && item.result.data.length > 0 && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadExcel(idx, item.query);
+                    }}
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-all active:scale-95 border border-emerald-500/30 whitespace-nowrap"
+                  >
+                    <span>📊</span> EXPORT TABLE (EXCEL)
+                  </button>
+                )}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadPDF(idx, item.query);
+                  }}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all active:scale-95 border-2 border-white/20 whitespace-nowrap"
+                >
+                  <span>📄</span> EXPORT PDF
+                </button>
+              </div>
             </div>
             
             <div className="space-y-12 md:pl-12">
@@ -385,13 +426,22 @@ const ChatInterface: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="flex justify-center mt-8">
+                  <div className="flex justify-center flex-col sm:flex-row gap-4 mt-8">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadExcel(idx, item.query);
+                      }}
+                      className="flex justify-center items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-white bg-emerald-500/5 hover:bg-emerald-500 px-8 py-3 rounded-full shadow-xl transition-all transform hover:scale-105 border border-emerald-500/20"
+                    >
+                      <span>📊</span> Download Table Data (Excel)
+                    </button>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDownloadPDF(idx, item.query);
                       }}
-                      className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-white bg-emerald-500/5 hover:bg-emerald-500 px-8 py-3 rounded-full shadow-xl transition-all transform hover:scale-105 border border-emerald-500/20"
+                      className="flex justify-center items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-white bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-full shadow-xl transition-all transform hover:scale-105 border border-emerald-500/20"
                     >
                       <span>📥</span> Generate Full Report PDF
                     </button>
