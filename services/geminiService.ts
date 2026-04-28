@@ -70,7 +70,6 @@ To prevent "Invalid Column" errors, use these verified synonyms:
 - **Sales Rep**: Use \`SalesRepName\`.
 - **Product**: Use \`ProductName\`.
 - **Pack Size**: Use \`PackSize\`.
-- **Group Hierarchy**: Use \`CustomerGroup\` for corporate groups (BUCO, Build It) vs \`BranchName\` for individual stores.
 
 ## 2. FINANCIALS (CURRENCY - EXCLUSIVE OF VAT)
 - **Net Sales / Revenue**: Use \`Revenue\`, \`MonthlyRevenue\`, or \`ActualRevenue\`.
@@ -106,10 +105,6 @@ To prevent "Invalid Column" errors, use these verified synonyms:
   - Generate SQL to pull a 36-month time-series grouping by \`TimeKey\`.
   - Do not calculate the forecast in SQL. Hand the raw data to the background statistical model.
   - Recommended metrics to fetch: \`MonthlyQty\`, \`MonthlyRevenue\`, \`SuggestedWeeklySafetyStock\`.
-
-## D. GRANULARITY RULES
-- Use \`ProductBaseName\` to group/sum products while ignoring individual colors/variants.
-- Use \`CustomerGroup\` to compare corporate entities (e.g., "BUCO Group" vs "Build It").
 
 # SQL DIALECT RULES
 - This is **Microsoft SQL Server (MSSQL)**.
@@ -199,8 +194,8 @@ export const analyzeQuery = async (prompt: string): Promise<QueryResult & { engi
   const ai = new GoogleGenerativeAI( apiKey );
 
   const fallbackModels = [
-    "gemini-2.5-flash-preview",
     "gemini-3.1-pro-preview",
+    //"gemini-3.0-flash-preview",
   ];
 
   const generateContentWithFallback = async (requestConfig: any) => {
