@@ -191,7 +191,7 @@ const ChatInterface: React.FC = () => {
         backgroundColor: '#020617',
         logging: false,
         width: 1200,
-        onclone: (clonedDoc) => {
+        onclone: (clonedDoc: Document) => {
           const clonedElement = clonedDoc.body.querySelector(`[data-pdf-id="${index}"]`) as HTMLElement;
           if (clonedElement) {
             clonedElement.style.width = '1200px';
@@ -200,7 +200,7 @@ const ChatInterface: React.FC = () => {
             clonedElement.style.border = 'none';
           }
         }
-      });
+      } as any);
 
       element.style.cssText = originalStyle;
 
@@ -211,7 +211,7 @@ const ChatInterface: React.FC = () => {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pdfWidth - (2 * margin);
-      const imgProps = pdf.getImageProperties(imgData);
+      const imgProps = (pdf as any).getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       
       let heightLeft = imgHeight;
