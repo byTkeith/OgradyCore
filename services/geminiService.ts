@@ -110,7 +110,7 @@ To prevent "Invalid Column" errors, use these verified synonyms:
 - This is **Microsoft SQL Server (MSSQL)**.
 - Use \`SELECT TOP X\` instead of \`LIMIT\`.
 - Use \`LIKE '%...%'\` for string searches to handle naming variations.
-- Exclude internal test branches: \`WHERE BranchName NOT LIKE '%TOP T%'\`.
+
 
 # OUTPUT FORMAT (STRICT) - No markdown backticks:
 >>>SQL
