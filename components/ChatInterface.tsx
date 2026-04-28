@@ -6,7 +6,6 @@ import Visualizer from './Visualizer';
 import InsightPanel from './InsightPanel';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import * as XLSX from 'xlsx';
 
 const SummaryTable: React.FC<{ data: any[], xAxis: string, yAxis: string }> = ({ data, xAxis, yAxis }) => {
   if (!data || data.length === 0) return (
@@ -156,20 +155,33 @@ const ChatInterface: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const resultRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const handleDownloadExcel = (index: number, query: string) => {
+  const handleDownloadCSV = (index: number, query: string) => {
     const item = results[index];
     if (!item || !item.result.data || item.result.data.length === 0) return;
 
     try {
-      const worksheet = XLSX.utils.json_to_sheet(item.result.data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-      
+      const data = item.result.data;
+      const headers = Object.keys(data[0]);
+      const csvContent = [
+        headers.join(','),
+        ...data.map(row => headers.map(header => {
+          const cell = row[header] === null || row[header] === undefined ? '' : String(row[header]);
+          return `"${cell.replace(/"/g, '""')}"`;
+        }).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
       const safeQueryName = query.replace(/[^a-zA-Z0-9 -]/g, "").substring(0, 30).trim();
-      XLSX.writeFile(workbook, `O_Grady_${safeQueryName || 'Data'}.xlsx`);
+      link.setAttribute("download", `O_Grady_${safeQueryName || 'Data'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (err) {
-      console.error("Failed to export Excel:", err);
-      setError("Failed to export Excel. See console for details.");
+      console.error("Failed to export CSV:", err);
+      setError("Failed to export CSV. See console for details.");
     }
   };
 
@@ -324,10 +336,10 @@ const ChatInterface: React.FC = () => {
             <div className="flex gap-2">
               {results[results.length - 1].result.data && results[results.length - 1].result.data.length > 0 && (
                 <button 
-                  onClick={() => handleDownloadExcel(results.length - 1, results[results.length - 1].query)}
+                  onClick={() => handleDownloadCSV(results.length - 1, results[results.length - 1].query)}
                   className="bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white text-emerald-400 text-[9px] font-black uppercase px-4 py-1.5 rounded-full shadow-lg transition-all flex items-center gap-2"
                 >
-                  <span>📊</span> Export Latest Excel
+                  <span>📊</span> Export Latest CSV
                 </button>
               )}
               <button 
@@ -380,11 +392,11 @@ const ChatInterface: React.FC = () => {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDownloadExcel(idx, item.query);
+                      handleDownloadCSV(idx, item.query);
                     }}
                     className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-all active:scale-95 border border-emerald-500/30 whitespace-nowrap"
                   >
-                    <span>📊</span> EXPORT TABLE (EXCEL)
+                    <span>📊</span> EXPORT TABLE (CSV)
                   </button>
                 )}
                 <button 
@@ -430,11 +442,11 @@ const ChatInterface: React.FC = () => {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDownloadExcel(idx, item.query);
+                        handleDownloadCSV(idx, item.query);
                       }}
                       className="flex justify-center items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-white bg-emerald-500/5 hover:bg-emerald-500 px-8 py-3 rounded-full shadow-xl transition-all transform hover:scale-105 border border-emerald-500/20"
                     >
-                      <span>📊</span> Download Table Data (Excel)
+                      <span>📊</span> Download Table Data (CSV)
                     </button>
                     <button 
                       onClick={(e) => {
